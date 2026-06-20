@@ -3,8 +3,10 @@
 from typing import Annotated
 
 import typer
+from rich.markup import escape
 
 from git_ssh_sync import __version__
+from git_ssh_sync.clone import CloneError, clone_project
 from git_ssh_sync.config import (
     ConfigError,
     ProjectAlreadyExistsError,
@@ -12,6 +14,7 @@ from git_ssh_sync.config import (
     init_project,
 )
 from git_ssh_sync.console import console
+from git_ssh_sync.errors import CommandExecutionError
 
 app = typer.Typer(
     name="git-ssh-sync",
@@ -104,7 +107,13 @@ def clone_command(
     project: Annotated[str, typer.Argument(help="Project name to clone.")],
 ) -> None:
     """Clone the project locally and initialize the development environment."""
-    _not_implemented("clone", project)
+    try:
+        clone_project(project)
+    except (ConfigError, CloneError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+    console.print(f"Project '{project}' cloned.")
 
 
 @app.command("status")

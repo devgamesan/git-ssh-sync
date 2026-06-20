@@ -1,6 +1,8 @@
 from typer.testing import CliRunner
 
+from git_ssh_sync import cli
 from git_ssh_sync.cli import app
+from git_ssh_sync.clone import CloneError
 from git_ssh_sync.config import default_config_path, get_project, load_config
 
 
@@ -77,3 +79,26 @@ def test_init_command_requires_force_for_existing_project(monkeypatch, tmp_path)
     assert first.exit_code == 0
     assert second.exit_code == 1
     assert "Use --force" in second.output
+
+
+def test_clone_command_runs_clone_workflow(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(cli, "clone_project", lambda project: calls.append(project))
+
+    result = runner.invoke(app, ["clone", "myproject"])
+
+    assert result.exit_code == 0
+    assert calls == ["myproject"]
+    assert "Project 'myproject' cloned." in result.output
+
+
+def test_clone_command_reports_clone_error(monkeypatch) -> None:
+    def fail(project: str) -> None:
+        raise CloneError("[local] path already exists: /tmp/myproject")
+
+    monkeypatch.setattr(cli, "clone_project", fail)
+
+    result = runner.invoke(app, ["clone", "myproject"])
+
+    assert result.exit_code == 1
+    assert "[local] path already exists" in result.output
