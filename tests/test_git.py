@@ -40,6 +40,7 @@ def test_git_wrappers_build_expected_commands(monkeypatch: pytest.MonkeyPatch) -
 
     git.push("origin", ["HEAD:main"])
     git.rev_parse(["--abbrev-ref", "HEAD"])
+    git.log_oneline("origin/main")
     git.status_porcelain()
     git.merge_base("main", "HEAD")
     git.rev_list(["--left-right", "main...HEAD"])
@@ -48,6 +49,7 @@ def test_git_wrappers_build_expected_commands(monkeypatch: pytest.MonkeyPatch) -
     assert commands == [
         ["git", "push", "origin", "HEAD:main"],
         ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        ["git", "log", "-1", "--format=%h %s", "origin/main"],
         ["git", "status", "--porcelain"],
         ["git", "merge-base", "main", "HEAD"],
         ["git", "rev-list", "--left-right", "main...HEAD"],
