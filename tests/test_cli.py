@@ -1,6 +1,7 @@
 from typer.testing import CliRunner
 
 from git_ssh_sync.cli import app
+from git_ssh_sync.config import default_config_path, get_project, load_config
 
 
 runner = CliRunner()
@@ -21,3 +22,58 @@ def test_subcommand_help() -> None:
 
         assert result.exit_code == 0
         assert command in result.output
+
+
+def test_init_command_creates_project_config(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = runner.invoke(
+        app,
+        [
+            "init",
+            "myproject",
+            "--origin",
+            "git@github.com:example/myproject.git",
+            "--dev-host",
+            "devserver",
+            "--dev-user",
+            "user",
+            "--dev-path",
+            "/home/user/work/myproject",
+            "--branch",
+            "main",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Project 'myproject' saved" in result.output
+
+    project = get_project(load_config(default_config_path()), "myproject")
+
+    assert project.origin == "git@github.com:example/myproject.git"
+    assert project.default_branch == "main"
+    assert project.dev.host == "devserver"
+    assert project.dev.user == "user"
+
+
+def test_init_command_requires_force_for_existing_project(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    args = [
+        "init",
+        "myproject",
+        "--origin",
+        "git@github.com:example/myproject.git",
+        "--dev-host",
+        "devserver",
+        "--dev-user",
+        "user",
+        "--dev-path",
+        "/home/user/work/myproject",
+    ]
+
+    first = runner.invoke(app, args)
+    second = runner.invoke(app, args)
+
+    assert first.exit_code == 0
+    assert second.exit_code == 1
+    assert "Use --force" in second.output
