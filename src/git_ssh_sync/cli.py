@@ -1,0 +1,135 @@
+"""Command line interface for git-ssh-sync."""
+
+from typing import Annotated
+
+import typer
+
+from git_ssh_sync import __version__
+from git_ssh_sync.console import console
+
+app = typer.Typer(
+    name="git-ssh-sync",
+    help="Sync Git commits through a local machine over SSH.",
+    no_args_is_help=True,
+)
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        console.print(f"git-ssh-sync {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def callback(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show the application version and exit.",
+        ),
+    ] = False,
+) -> None:
+    """Sync Git commits through a local machine over SSH."""
+
+
+def _not_implemented(command: str, project: str | None = None) -> None:
+    target = f" for project '{project}'" if project else ""
+    console.print(
+        f"[yellow]{command}[/yellow]{target} is defined, but the sync implementation is not available yet."
+    )
+
+
+@app.command("init")
+def init_command(
+    project: Annotated[str, typer.Argument(help="Project name to register.")],
+    origin: Annotated[
+        str | None,
+        typer.Option("--origin", help="Origin Git URL, such as git@github.com:org/repo.git."),
+    ] = None,
+    dev_host: Annotated[
+        str | None,
+        typer.Option("--dev-host", help="Development environment SSH host."),
+    ] = None,
+    dev_user: Annotated[
+        str | None,
+        typer.Option("--dev-user", help="Development environment SSH user."),
+    ] = None,
+    dev_path: Annotated[
+        str | None,
+        typer.Option("--dev-path", help="Development environment work repository path."),
+    ] = None,
+    branch: Annotated[
+        str,
+        typer.Option("--branch", help="Default branch to synchronize."),
+    ] = "main",
+) -> None:
+    """Create a project configuration."""
+    _ = (origin, dev_host, dev_user, dev_path, branch)
+    _not_implemented("init", project)
+
+
+@app.command("clone")
+def clone_command(
+    project: Annotated[str, typer.Argument(help="Project name to clone.")],
+) -> None:
+    """Clone the project locally and initialize the development environment."""
+    _not_implemented("clone", project)
+
+
+@app.command("status")
+def status_command(
+    project: Annotated[str, typer.Argument(help="Project name to inspect.")],
+) -> None:
+    """Show synchronization state for origin, gateway, and development repositories."""
+    _not_implemented("status", project)
+
+
+@app.command("pull")
+def pull_command(
+    project: Annotated[str, typer.Argument(help="Project name to pull.")],
+    branch: Annotated[
+        str | None,
+        typer.Option("--branch", help="Branch to pull. Defaults to the configured branch."),
+    ] = None,
+) -> None:
+    """Fetch origin changes and fast-forward the development repository."""
+    _ = branch
+    _not_implemented("pull", project)
+
+
+@app.command("push")
+def push_command(
+    project: Annotated[str, typer.Argument(help="Project name to push.")],
+    branch: Annotated[
+        str | None,
+        typer.Option("--branch", help="Branch to push. Defaults to the configured branch."),
+    ] = None,
+) -> None:
+    """Push development commits to origin when it is safe to do so."""
+    _ = branch
+    _not_implemented("push", project)
+
+
+@app.command("checkout")
+def checkout_command(
+    project: Annotated[str, typer.Argument(help="Project name to update.")],
+    branch: Annotated[str, typer.Argument(help="Branch to check out in the development repository.")],
+) -> None:
+    """Switch the development repository to a branch."""
+    _ = branch
+    _not_implemented("checkout", project)
+
+
+@app.command("doctor")
+def doctor_command(
+    project: Annotated[str, typer.Argument(help="Project name to diagnose.")],
+) -> None:
+    """Check local, SSH, Git, and repository layout prerequisites."""
+    _not_implemented("doctor", project)
+
+
+def main() -> None:
+    app()
