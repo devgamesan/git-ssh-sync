@@ -5,6 +5,12 @@ from typing import Annotated
 import typer
 
 from git_ssh_sync import __version__
+from git_ssh_sync.config import (
+    ConfigError,
+    ProjectAlreadyExistsError,
+    default_config_path,
+    init_project,
+)
 from git_ssh_sync.console import console
 
 app = typer.Typer(
@@ -65,10 +71,32 @@ def init_command(
         str,
         typer.Option("--branch", help="Default branch to synchronize."),
     ] = "main",
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite an existing project configuration."),
+    ] = False,
 ) -> None:
     """Create a project configuration."""
-    _ = (origin, dev_host, dev_user, dev_path, branch)
-    _not_implemented("init", project)
+    try:
+        project_config = init_project(
+            project,
+            origin=origin,
+            default_branch=branch,
+            dev_host=dev_host,
+            dev_user=dev_user,
+            dev_work_path=dev_path,
+            force=force,
+        )
+    except ProjectAlreadyExistsError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(code=1) from error
+    except ConfigError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(code=1) from error
+
+    console.print(f"Project '{project}' saved to {default_config_path()}")
+    console.print(f"origin: {project_config.origin}")
+    console.print(f"default_branch: {project_config.default_branch}")
 
 
 @app.command("clone")
