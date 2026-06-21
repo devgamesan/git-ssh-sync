@@ -1,3 +1,5 @@
+[![日本語](https://img.shields.io/badge/lang-日本語-blue)](README.ja.md) [![English](https://img.shields.io/badge/lang-English-brightgreen)](README.md)
+
 # git-ssh-sync
 
 [![CI](https://github.com/devgamesan/git-ssh-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/devgamesan/git-ssh-sync/actions/workflows/ci.yml)
@@ -6,60 +8,60 @@
 ![Release](https://img.shields.io/github/v/release/devgamesan/git-ssh-sync)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-`git-ssh-sync` は、GitHub / GitLab に直接アクセスできない開発環境で作成した Git コミットを、ローカルマシン経由で外部 Git サービスへ同期するための CLI ツールです。
+`git-ssh-sync` is a CLI tool for synchronizing Git commits created in a development environment that cannot directly access GitHub/GitLab to external Git services via a local machine.
 
-このツールはファイル同期ツールではありません。同期するのは Git オブジェクトとブランチです。ソース編集、ビルド、テスト、コミットは開発環境で行い、GitHub / GitLab との通信はローカルマシンで行います。
+This is not a file synchronization tool. It synchronizes Git objects and branches. Source editing, building, testing, and committing are performed in the development environment, while communication with GitHub/GitLab is handled by the local machine.
 
-## 前提
+## Prerequisites
 
-`git-ssh-sync` は次のような構成を前提にしています。
+`git-ssh-sync` assumes the following configuration:
 
 ```text
 GitHub / GitLab
     ↑↓
-ローカルマシン
+Local machine
     ↑↓ SSH
-開発環境
+Development environment
 ```
 
-ローカルマシン:
+Local machine:
 
-- GitHub / GitLab にアクセスできる
-- 開発環境へ SSH 接続できる
-- `git` と `uv` を利用できる
-- `git-ssh-sync` で GitHub / GitLab と開発環境の間のコミット同期、状態確認、診断を行う
+- Can access GitHub / GitLab
+- Can SSH to the development environment
+- Has `git` and `uv` available
+- Uses `git-ssh-sync` for commit synchronization, status checks, and diagnostics between GitHub/GitLab and the development environment
 
-開発環境:
+Development environment:
 
-- ローカルマシンから SSH 接続できる
-- 開発環境から GitHub / GitLab に直接アクセスできない
-- `git` を利用できる
-- ソース編集、ビルド、テスト、コミットを行う
-- GitHub / GitLab との同期はローカルマシン経由で行う
+- Can be accessed via SSH from the local machine
+- Cannot directly access GitHub / GitLab from the development environment
+- Has `git` available
+- Performs source editing, building, testing, and committing
+- Synchronizes with GitHub/GitLab via the local machine
 
-## インストール
+## Installation
 
-通常利用では、ローカルマシンに `uv tool install` でインストールして使います。
+For normal use, install on your local machine using `uv tool install`.
 
 ```bash
 uv tool install git-ssh-sync
 ```
 
-未リリース版やリポジトリの最新版を使う場合は、GitHub から直接インストールします。
+For unreleased versions or the latest repository version, install directly from GitHub.
 
 ```bash
 uv tool install git+https://github.com/devgamesan/git-ssh-sync.git
 ```
 
-インストール後、コマンドが実行できることを確認します。
+After installation, verify that the command can be executed.
 
 ```bash
 git-ssh-sync --help
 ```
 
-## 設定
+## Configuration
 
-最初に、同期したいプロジェクトを登録します。
+First, register the project you want to synchronize.
 
 ```bash
 git-ssh-sync init myproject \
@@ -69,15 +71,15 @@ git-ssh-sync init myproject \
   --dev-path /home/user/work/myproject
 ```
 
-主な指定内容は次のとおりです。
+Key parameters:
 
-- `myproject`: `git-ssh-sync` 上のプロジェクト名
-- `--origin`: GitHub / GitLab 側のリポジトリ URL
-- `--dev-host`: 開発環境の SSH ホスト
-- `--dev-user`: 開発環境の SSH ユーザー
-- `--dev-path`: 開発環境上の work repo パス
+- `myproject`: Project name for `git-ssh-sync`
+- `--origin`: Repository URL on the GitHub / GitLab side
+- `--dev-host`: SSH host of the development environment
+- `--dev-user`: SSH user of the development environment
+- `--dev-path`: Path to the work repository on the development environment
 
-`--origin` には、`git clone` や `git fetch` で指定できるリモート URL を指定します。主な形式は次のとおりです。
+For `--origin`, specify a remote URL that can be used with `git clone` or `git fetch`. Main formats are:
 
 ```text
 git@github.com:example/myproject.git
@@ -87,9 +89,9 @@ https://github.com/example/myproject.git
 https://gitlab.com/example/myproject.git
 ```
 
-SSH 形式を使う場合、GitHub / GitLab へ接続するための SSH 鍵や認証設定はローカルマシン側に用意してください。開発環境から GitHub / GitLab へは直接接続しません。
+When using SSH format, prepare SSH keys and authentication settings for connecting to GitHub/GitLab on the local machine. The development environment does not connect directly to GitHub/GitLab.
 
-登録済みの設定を上書きする場合は `--force` を付けます。
+To overwrite existing configuration, use `--force`.
 
 ```bash
 git-ssh-sync init myproject \
@@ -100,9 +102,9 @@ git-ssh-sync init myproject \
   --force
 ```
 
-## 初回 workflow
+## Initial Workflow
 
-初回は、設定作成、開発環境への clone、診断の順に実行します。
+For the first time, execute configuration, clone to the development environment, and diagnostics in order.
 
 ```bash
 git-ssh-sync init myproject \
@@ -114,27 +116,27 @@ git-ssh-sync clone myproject
 git-ssh-sync doctor myproject
 ```
 
-`clone` はローカルマシンに gateway repo を作成し、開発環境に cache repo と work repo を配置します。
+`clone` creates a gateway repository on your local machine and deploys cache and work repositories on the development environment.
 
-- gateway repo: ローカルマシン上にある中継用リポジトリ
-- cache repo: 開発環境上にある bare リポジトリ
-- work repo: 開発環境上で実際に編集、ビルド、テスト、コミットを行うリポジトリ
+- Gateway repository: Relay repository on the local machine
+- Cache repository: Bare repository on the development environment
+- Work repository: Repository where actual editing, building, testing, and committing are performed on the development environment
 
-以後、開発環境では work repo を通常の Git リポジトリとして扱えます。
+Afterward, the work repository on the development environment can be used as a normal Git repository.
 
-`doctor` はローカル環境、SSH 接続、origin への fetch / push 権限、開発環境側のリポジトリ配置を確認します。初回だけでなく、同期がうまくいかない時にも最初に実行してください。
+`doctor` checks the local environment, SSH connection, fetch/push permissions to origin, and repository deployment on the development environment. Run this not only for the first time but also when synchronization is not working properly.
 
-## 日常開発 workflow
+## Daily Development Workflow
 
-日常開発では、作業開始前にローカルマシンから `pull` し、開発環境で通常どおりコミットし、最後にローカルマシンから `push` します。
+For daily development, `pull` from the local machine before starting work, commit normally in the development environment, and finally `push` from the local machine.
 
-ローカルマシン:
+Local machine:
 
 ```bash
 git-ssh-sync pull myproject
 ```
 
-開発環境:
+Development environment:
 
 ```bash
 cd ~/work/myproject
@@ -143,31 +145,31 @@ git add .
 git commit -m "Add feature"
 ```
 
-ローカルマシン:
+Local machine:
 
 ```bash
 git-ssh-sync push myproject
 ```
 
-`pull` と `push` は、開発環境 work repo のカレントブランチを対象にします。別のブランチを同期したい場合は、先に `checkout` で work repo のブランチを切り替えます。
+`pull` and `push` target the current branch of the work repository on the development environment. To synchronize a different branch, switch the work repository branch with `checkout` first.
 
-## ブランチ切り替え workflow
+## Branch Switching Workflow
 
-既存ブランチへ切り替える場合は、ローカルマシンから `checkout` を実行します。
+To switch to an existing branch, execute `checkout` from the local machine.
 
-ローカルマシン:
+Local machine:
 
 ```bash
 git-ssh-sync checkout myproject feature/foo
 ```
 
-新しいブランチを作る場合は `-b` を付けます。起点を明示する場合は `--base` を併用します。
+To create a new branch, use `-b`. Use `--base` together to explicitly specify the starting point.
 
 ```bash
 git-ssh-sync checkout myproject -b feature/foo --base develop
 ```
 
-開発環境:
+Development environment:
 
 ```bash
 cd ~/work/myproject
@@ -176,106 +178,106 @@ git add .
 git commit -m "Implement foo"
 ```
 
-ローカルマシン:
+Local machine:
 
 ```bash
 git-ssh-sync push myproject
 ```
 
-`checkout -b feature/foo --base develop` は、origin の `develop` を元に origin 上へ `feature/foo` を作成し、開発環境の work repo をそのブランチへ切り替えます。`--base` を省略した場合は、開発環境 work repo のカレントブランチを起点にします。すでに origin に同名ブランチがある場合は、`-b` なしで既存ブランチへ切り替えてください。
+`checkout -b feature/foo --base develop` creates `feature/foo` on origin based on `develop` from origin and switches the work repository on the development environment to that branch. If `--base` is omitted, the current branch of the work repository on the development environment is used as the starting point. If a branch with the same name already exists on origin, switch to the existing branch without `-b`.
 
-## 状態確認
+## Status Check
 
-同期状態を確認するには `status` を使います。
+Use `status` to check synchronization status.
 
 ```bash
 git-ssh-sync status myproject
 ```
 
-`status` は、開発環境 work repo のカレントブランチを対象に、origin と開発環境の ahead / behind、作業ツリー状態を表示します。表示された recommendation に従って、必要に応じて `pull` または `push` を実行してください。
+`status` displays the ahead/behind status between origin and the development environment, and the working tree status for the current branch of the work repository. Follow the displayed recommendation and execute `pull` or `push` as necessary.
 
-ブランチごとの存在状況や ahead / behind を一覧するには `branch` を使います。
+To list existence status and ahead/behind for each branch, use `branch`.
 
 ```bash
 git-ssh-sync branch myproject
 ```
 
-## 運用ルール
+## Operational Rules
 
-`git-ssh-sync` を使う時は、次のルールを守ると状態を把握しやすくなります。
+When using `git-ssh-sync`, following these rules makes it easier to understand the state:
 
-- 作業開始前にローカルマシンで `pull` する
-- コミットは開発環境で作る
-- 作業が終わったらローカルマシンで `push` する
-- 同期前後で迷ったら `status` を見る
-- 接続やリポジトリ配置に不安がある時は `doctor` を実行する
+- `pull` on the local machine before starting work
+- Create commits in the development environment
+- `push` on the local machine when work is done
+- Check `status` when in doubt before/after synchronization
+- Run `doctor` when concerned about connections or repository deployment
 
-未コミット変更は同期されません。開発環境の作業ツリーに未コミットの変更がある場合、その変更自体はローカルマシンや origin には送られません。同期したい変更は、開発環境で `git add` と `git commit` を済ませてください。
+Uncommitted changes are not synchronized. If there are uncommitted changes in the working tree of the development environment, the changes themselves are not sent to the local machine or origin. Please `git add` and `git commit` changes you want to synchronize in the development environment.
 
-`pull` は fast-forward できる場合だけ開発環境のブランチを更新します。origin と開発環境が分岐している場合、自動 merge や自動 rebase は行いません。
+`pull` updates the development environment branch only when fast-forward is possible. If origin and the development environment have diverged, automatic merge or automatic rebase is not performed.
 
-`push` は origin 側のブランチが開発環境側のブランチの祖先である場合だけ実行します。origin に未取得のコミットがある場合は停止します。
+`push` executes only when the branch on the origin side is an ancestor of the branch on the development environment side. If there are unobtained commits on origin, it stops.
 
-分岐した場合は自動では解決しません。ローカルマシンで `pull` を実行して表示された手順に従い、開発環境で merge または rebase を行ってから、再度 `push` してください。
+When diverged, automatic resolution is not performed. Execute `pull` on the local machine, follow the displayed instructions to merge or rebase in the development environment, then `push` again.
 
-## よく使うコマンド
+## Common Commands
 
 ```bash
-# ヘルプを表示
+# Display help
 git-ssh-sync --help
 
-# プロジェクトを登録
+# Register a project
 git-ssh-sync init myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
   --dev-user user \
   --dev-path /home/user/work/myproject
 
-# 初回 clone
+# Initial clone
 git-ssh-sync clone myproject
 
-# 同期状態を確認
+# Check synchronization status
 git-ssh-sync status myproject
 
-# ブランチ状態を確認
+# Check branch status
 git-ssh-sync branch myproject
 
-# origin の変更を開発環境へ反映
+# Reflect changes from origin to development environment
 git-ssh-sync pull myproject
 
-# 開発環境のコミットを origin へ反映
+# Reflect commits from development environment to origin
 git-ssh-sync push myproject
 
-# 開発環境のブランチを切り替え
+# Switch development environment branch
 git-ssh-sync checkout myproject feature/foo
 
-# ベースブランチから新規ブランチを作成して切り替え
+# Create and switch to new branch from base branch
 git-ssh-sync checkout myproject -b feature/foo --base develop
 
-# 診断
+# Diagnostics
 git-ssh-sync doctor myproject
 ```
 
-## 開発者向け
+## For Developers
 
-このリポジトリ自体を開発する場合は、依存関係を `uv sync` でインストールします。
+To develop this repository itself, install dependencies using `uv sync`.
 
 ```bash
 uv sync
 ```
 
-開発中に CLI を実行する場合は、`uv run` 経由で実行できます。
+To execute the CLI during development, you can run it via `uv run`.
 
 ```bash
 uv run git-ssh-sync --help
 ```
 
-テストは次のコマンドで実行します。
+Tests are executed with the following command:
 
 ```bash
 uv run pytest
 ```
 
-## 関連ドキュメント
+## Related Documentation
 
-- [仕様書](docs/spec.md)
+- [Specification](docs/spec.md)
