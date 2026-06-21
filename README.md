@@ -6,9 +6,9 @@
 ![Release](https://img.shields.io/github/v/release/devgamesan/git-ssh-sync)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-`git-ssh-sync` は、GitHub / GitLab に直接アクセスできない開発環境で作成した Git コミットを、手元マシン経由で外部 Git サービスへ同期するための CLI ツールです。
+`git-ssh-sync` は、GitHub / GitLab に直接アクセスできない開発環境で作成した Git コミットを、ローカルマシン経由で外部 Git サービスへ同期するための CLI ツールです。
 
-このツールはファイル同期ツールではありません。同期するのは Git オブジェクトとブランチです。ソース編集、ビルド、テスト、コミットは開発環境で行い、GitHub / GitLab との通信は手元マシンで行います。
+このツールはファイル同期ツールではありません。同期するのは Git オブジェクトとブランチです。ソース編集、ビルド、テスト、コミットは開発環境で行い、GitHub / GitLab との通信はローカルマシンで行います。
 
 ## 前提
 
@@ -17,12 +17,12 @@
 ```text
 GitHub / GitLab
     ↑↓
-手元マシン
+ローカルマシン
     ↑↓ SSH
 開発環境
 ```
 
-手元マシン:
+ローカルマシン:
 
 - GitHub / GitLab にアクセスできる
 - 開発環境へ SSH 接続できる
@@ -31,29 +31,29 @@ GitHub / GitLab
 
 開発環境:
 
-- 手元マシンから SSH 接続できる
+- ローカルマシンから SSH 接続できる
 - `git` を利用できる
 - ソース編集、ビルド、テスト、コミットを行う
 - GitHub / GitLab の認証情報を置かない
 
-## 環境構築
+## インストール
 
-依存関係は `uv sync` でインストールします。
+通常利用では、ローカルマシンに `uv tool install` でインストールして使います。
 
 ```bash
-uv sync
+uv tool install git-ssh-sync
 ```
 
-開発中に CLI を実行する場合は、`uv run` 経由で実行します。
+未リリース版やリポジトリの最新版を使う場合は、GitHub から直接インストールします。
 
 ```bash
-uv run git-ssh-sync --help
+uv tool install git+https://github.com/devgamesan/git-ssh-sync.git
 ```
 
-テストは次のコマンドで実行します。
+インストール後、コマンドが実行できることを確認します。
 
 ```bash
-uv run pytest
+git-ssh-sync --help
 ```
 
 ## 設定
@@ -61,7 +61,7 @@ uv run pytest
 最初に、同期したいプロジェクトを登録します。
 
 ```bash
-uv run git-ssh-sync init myproject \
+git-ssh-sync init myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
   --dev-user user \
@@ -81,7 +81,7 @@ uv run git-ssh-sync init myproject \
 登録済みの設定を上書きする場合は `--force` を付けます。
 
 ```bash
-uv run git-ssh-sync init myproject \
+git-ssh-sync init myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
   --dev-user user \
@@ -95,28 +95,28 @@ uv run git-ssh-sync init myproject \
 初回は、設定作成、開発環境への clone、診断の順に実行します。
 
 ```bash
-uv run git-ssh-sync init myproject \
+git-ssh-sync init myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
   --dev-user user \
   --dev-path /home/user/work/myproject \
   --branch main
-uv run git-ssh-sync clone myproject
-uv run git-ssh-sync doctor myproject
+git-ssh-sync clone myproject
+git-ssh-sync doctor myproject
 ```
 
-`clone` は手元マシンに gateway repo を作成し、開発環境に cache repo と work repo を配置します。以後、開発環境では通常の Git リポジトリとして作業できます。
+`clone` はローカルマシンに gateway repo を作成し、開発環境に cache repo と work repo を配置します。以後、開発環境では通常の Git リポジトリとして作業できます。
 
 `doctor` はローカル環境、SSH 接続、origin への fetch / push 権限、開発環境側のリポジトリ配置を確認します。初回だけでなく、同期がうまくいかない時にも最初に実行してください。
 
 ## 日常開発 workflow
 
-日常開発では、作業開始前に手元マシンから `pull` し、開発環境で通常どおりコミットし、最後に手元マシンから `push` します。
+日常開発では、作業開始前にローカルマシンから `pull` し、開発環境で通常どおりコミットし、最後にローカルマシンから `push` します。
 
-手元マシン:
+ローカルマシン:
 
 ```bash
-uv run git-ssh-sync pull myproject --branch main
+git-ssh-sync pull myproject --branch main
 ```
 
 開発環境:
@@ -128,33 +128,33 @@ git add .
 git commit -m "Add feature"
 ```
 
-手元マシン:
+ローカルマシン:
 
 ```bash
-uv run git-ssh-sync push myproject --branch main
+git-ssh-sync push myproject --branch main
 ```
 
 `pull` と `push` は対象ブランチを明示する必要があります。
 
 ```bash
-uv run git-ssh-sync pull myproject --branch main
-uv run git-ssh-sync push myproject --branch main
+git-ssh-sync pull myproject --branch main
+git-ssh-sync push myproject --branch main
 ```
 
 ## ブランチ切り替え workflow
 
-既存ブランチへ切り替える場合は、手元マシンから `checkout` を実行します。
+既存ブランチへ切り替える場合は、ローカルマシンから `checkout` を実行します。
 
-手元マシン:
+ローカルマシン:
 
 ```bash
-uv run git-ssh-sync checkout myproject feature/foo
+git-ssh-sync checkout myproject feature/foo
 ```
 
 新しいブランチを指定したベースブランチから作る場合は `--base` を付けます。
 
 ```bash
-uv run git-ssh-sync checkout myproject feature/foo --base develop
+git-ssh-sync checkout myproject feature/foo --base develop
 ```
 
 開発環境:
@@ -166,10 +166,10 @@ git add .
 git commit -m "Implement foo"
 ```
 
-手元マシン:
+ローカルマシン:
 
 ```bash
-uv run git-ssh-sync push myproject --branch feature/foo
+git-ssh-sync push myproject --branch feature/foo
 ```
 
 `checkout --base develop` は、origin の `develop` を元に `feature/foo` を作成し、開発環境の work repo をそのブランチへ切り替えます。すでに origin に同名ブランチがある場合は、`--base` なしで既存ブランチへ切り替えてください。
@@ -179,37 +179,37 @@ uv run git-ssh-sync push myproject --branch feature/foo
 同期状態を確認するには `status` を使います。
 
 ```bash
-uv run git-ssh-sync status myproject
+git-ssh-sync status myproject
 ```
 
-`status` は origin、手元マシン、開発環境のブランチと ahead / behind の状態を表示します。表示された recommendation に従って、必要に応じて `pull` または `push` を実行してください。
+`status` は origin、ローカルマシン、開発環境のブランチと ahead / behind の状態を表示します。表示された recommendation に従って、必要に応じて `pull` または `push` を実行してください。
 
 ## 運用ルール
 
 `git-ssh-sync` を使う時は、次のルールを守ると状態を把握しやすくなります。
 
-- 作業開始前に手元マシンで `pull` する
+- 作業開始前にローカルマシンで `pull` する
 - コミットは開発環境で作る
-- 作業が終わったら手元マシンで `push` する
+- 作業が終わったらローカルマシンで `push` する
 - 同期前後で迷ったら `status` を見る
 - 接続やリポジトリ配置に不安がある時は `doctor` を実行する
 
-未コミット変更は同期されません。開発環境の作業ツリーに未コミットの変更がある場合、その変更自体は手元マシンや origin には送られません。同期したい変更は、開発環境で `git add` と `git commit` を済ませてください。
+未コミット変更は同期されません。開発環境の作業ツリーに未コミットの変更がある場合、その変更自体はローカルマシンや origin には送られません。同期したい変更は、開発環境で `git add` と `git commit` を済ませてください。
 
 `pull` は fast-forward できる場合だけ開発環境のブランチを更新します。origin と開発環境が分岐している場合、自動 merge や自動 rebase は行いません。
 
 `push` は origin 側のブランチが開発環境側のブランチの祖先である場合だけ実行します。origin に未取得のコミットがある場合は停止します。
 
-分岐した場合は、先に手元マシンで `pull` を実行し、開発環境で merge または rebase を行ってから、再度 `push` してください。
+分岐した場合は、先にローカルマシンで `pull` を実行し、開発環境で merge または rebase を行ってから、再度 `push` してください。
 
 ## よく使うコマンド
 
 ```bash
 # ヘルプを表示
-uv run git-ssh-sync --help
+git-ssh-sync --help
 
 # プロジェクトを登録
-uv run git-ssh-sync init myproject \
+git-ssh-sync init myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
   --dev-user user \
@@ -217,28 +217,25 @@ uv run git-ssh-sync init myproject \
   --branch main
 
 # 初回 clone
-uv run git-ssh-sync clone myproject
+git-ssh-sync clone myproject
 
 # 同期状態を確認
-uv run git-ssh-sync status myproject
+git-ssh-sync status myproject
 
 # origin の変更を開発環境へ反映
-uv run git-ssh-sync pull myproject --branch main
+git-ssh-sync pull myproject --branch main
 
 # 開発環境のコミットを origin へ反映
-uv run git-ssh-sync push myproject --branch main
+git-ssh-sync push myproject --branch main
 
 # 開発環境のブランチを切り替え
-uv run git-ssh-sync checkout myproject feature/foo
+git-ssh-sync checkout myproject feature/foo
 
 # ベースブランチから新規ブランチを作成して切り替え
-uv run git-ssh-sync checkout myproject feature/foo --base develop
+git-ssh-sync checkout myproject feature/foo --base develop
 
 # 診断
-uv run git-ssh-sync doctor myproject
-
-# テスト
-uv run pytest
+git-ssh-sync doctor myproject
 ```
 
 ## Git サブコマンドとして使う場合
@@ -251,7 +248,25 @@ git ssh-sync push myproject --branch main
 git ssh-sync status myproject
 ```
 
-開発中は `uv run git-ssh-sync ...` を使うのが確実です。
+## 開発者向け
+
+このリポジトリ自体を開発する場合は、依存関係を `uv sync` でインストールします。
+
+```bash
+uv sync
+```
+
+開発中に CLI を実行する場合は、`uv run` 経由で実行できます。
+
+```bash
+uv run git-ssh-sync --help
+```
+
+テストは次のコマンドで実行します。
+
+```bash
+uv run pytest
+```
 
 ## 関連ドキュメント
 
