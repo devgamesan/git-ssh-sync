@@ -15,6 +15,7 @@ from git_ssh_sync.config import (
 )
 from git_ssh_sync.console import console
 from git_ssh_sync.errors import CommandExecutionError
+from git_ssh_sync.status import StatusError, status_project
 
 app = typer.Typer(
     name="git-ssh-sync",
@@ -121,7 +122,11 @@ def status_command(
     project: Annotated[str, typer.Argument(help="Project name to inspect.")],
 ) -> None:
     """Show synchronization state for origin, gateway, and development repositories."""
-    _not_implemented("status", project)
+    try:
+        status_project(project)
+    except (ConfigError, StatusError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
 
 
 @app.command("pull")

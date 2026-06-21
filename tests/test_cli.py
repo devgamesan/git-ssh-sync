@@ -4,6 +4,7 @@ from git_ssh_sync import cli
 from git_ssh_sync.cli import app
 from git_ssh_sync.clone import CloneError
 from git_ssh_sync.config import default_config_path, get_project, load_config
+from git_ssh_sync.status import StatusError
 
 
 runner = CliRunner()
@@ -102,3 +103,25 @@ def test_clone_command_reports_clone_error(monkeypatch) -> None:
 
     assert result.exit_code == 1
     assert "[local] path already exists" in result.output
+
+
+def test_status_command_runs_status_workflow(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(cli, "status_project", lambda project: calls.append(project))
+
+    result = runner.invoke(app, ["status", "myproject"])
+
+    assert result.exit_code == 0
+    assert calls == ["myproject"]
+
+
+def test_status_command_reports_status_error(monkeypatch) -> None:
+    def fail(project: str) -> None:
+        raise StatusError("[local] gateway repository does not exist: /tmp/myproject")
+
+    monkeypatch.setattr(cli, "status_project", fail)
+
+    result = runner.invoke(app, ["status", "myproject"])
+
+    assert result.exit_code == 1
+    assert "gateway repository does not exist" in result.output

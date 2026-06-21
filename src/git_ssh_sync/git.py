@@ -126,6 +126,17 @@ def rev_parse(
     return run_git(["rev-parse", *revisions], cwd=cwd, env=env, verbose=verbose)
 
 
+def log_oneline(
+    revision: str = "HEAD",
+    *,
+    cwd: str | Path | None = None,
+    env: Mapping[str, str] | None = None,
+    verbose: bool = False,
+) -> CommandResult:
+    """Run `git log -1 --format=%h %s` for a revision."""
+    return run_git(["log", "-1", "--format=%h %s", revision], cwd=cwd, env=env, verbose=verbose)
+
+
 def status_porcelain(
     *,
     cwd: str | Path | None = None,
