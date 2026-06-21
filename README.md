@@ -32,9 +32,10 @@ GitHub / GitLab
 開発環境:
 
 - ローカルマシンから SSH 接続できる
+- 開発環境から GitHub / GitLab に直接アクセスできない
 - `git` を利用できる
 - ソース編集、ビルド、テスト、コミットを行う
-- GitHub / GitLab の認証情報を置かない
+- GitHub / GitLab との同期はローカルマシン経由で行う
 
 ## インストール
 
@@ -88,7 +89,7 @@ https://github.com/example/myproject.git
 https://gitlab.com/example/myproject.git
 ```
 
-SSH 形式を使う場合、GitHub / GitLab へ接続するための SSH 鍵や認証設定はローカルマシン側に用意してください。開発環境側に GitHub / GitLab の認証情報を置く必要はありません。
+SSH 形式を使う場合、GitHub / GitLab へ接続するための SSH 鍵や認証設定はローカルマシン側に用意してください。開発環境から GitHub / GitLab へ直接接続する必要はありません。
 
 登録済みの設定を上書きする場合は `--force` を付けます。
 
