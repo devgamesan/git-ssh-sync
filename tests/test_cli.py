@@ -198,17 +198,36 @@ def test_push_command_reports_sync_error(monkeypatch) -> None:
 
 def test_checkout_command_runs_checkout_workflow(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(cli, "checkout_project", lambda project, branch: calls.append((project, branch)))
+    monkeypatch.setattr(
+        cli,
+        "checkout_project",
+        lambda project, branch, *, base_branch=None: calls.append((project, branch, base_branch)),
+    )
 
     result = runner.invoke(app, ["checkout", "myproject", "feature/foo"])
 
     assert result.exit_code == 0
-    assert calls == [("myproject", "feature/foo")]
+    assert calls == [("myproject", "feature/foo", None)]
+    assert "Project 'myproject' checked out feature/foo." in result.output
+
+
+def test_checkout_command_passes_base_branch(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "checkout_project",
+        lambda project, branch, *, base_branch=None: calls.append((project, branch, base_branch)),
+    )
+
+    result = runner.invoke(app, ["checkout", "myproject", "feature/foo", "--base", "develop"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", "feature/foo", "develop")]
     assert "Project 'myproject' checked out feature/foo." in result.output
 
 
 def test_checkout_command_reports_sync_error(monkeypatch) -> None:
-    def fail(project: str, branch: str) -> None:
+    def fail(project: str, branch: str, *, base_branch: str | None = None) -> None:
         raise SyncError("Development working tree is dirty.")
 
     monkeypatch.setattr(cli, "checkout_project", fail)

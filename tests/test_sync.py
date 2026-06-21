@@ -181,6 +181,112 @@ def test_checkout_project_switches_new_branch_from_gitsync(
     assert calls[-1] == ("remote-git", ("switch", "--track", "-c", "feature/foo", "gitsync/feature/foo"), True)
 
 
+def test_checkout_project_creates_branch_from_base(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+    local_calls: list[tuple[str, object]] = []
+    remote_calls: list[tuple[str, object]] = []
+    origin_refs = {"develop"}
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+
+    def fake_fetch(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
+        local_calls.append(("fetch", remote, tuple(refspecs), cwd))
+        if tuple(refspecs) == ("refs/heads/feature/foo:refs/remotes/origin/feature/foo",):
+            origin_refs.add("feature/foo")
+        return _result(("git", "fetch"))
+
+    def fake_run_git(args, *, cwd=None, check=True, **kwargs):
+        local_calls.append(("run-git", tuple(args), cwd, check))
+        if tuple(args[:3]) == ("show-ref", "--verify", "--quiet"):
+            branch = str(args[3]).removeprefix("refs/remotes/origin/")
+            return _result(("git", *args), returncode=0 if branch in origin_refs else 1)
+        return _result(("git", *args))
+
+    def fake_push(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
+        local_calls.append(("push", remote, tuple(refspecs), cwd))
+        return _result(("git", "push"))
+
+    def fake_run_remote_git(host: str, repo_path: str, args, *, user=None, check=True, **kwargs):
+        remote_calls.append(("remote-git", tuple(args), check))
+        if tuple(args) == ("status", "--porcelain"):
+            return _result(("ssh", host), "")
+        if tuple(args) == ("show-ref", "--verify", "--quiet", "refs/heads/feature/foo"):
+            return _result(("ssh", host), returncode=1)
+        return _result(("ssh", host))
+
+    monkeypatch.setattr(sync.git, "fetch", fake_fetch)
+    monkeypatch.setattr(sync.git, "run_git", fake_run_git)
+    monkeypatch.setattr(sync.git, "push", fake_push)
+    monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
+
+    sync.checkout_project("myproject", "feature/foo", base_branch="develop")
+
+    cache_url = "ssh://user@devserver/home/user/cache%20repo/myproject.git"
+    assert local_calls == [
+        ("fetch", "origin", (), local_path),
+        ("run-git", ("show-ref", "--verify", "--quiet", "refs/remotes/origin/develop"), local_path, False),
+        ("run-git", ("show-ref", "--verify", "--quiet", "refs/remotes/origin/feature/foo"), local_path, False),
+        ("push", "origin", ("refs/remotes/origin/develop:refs/heads/feature/foo",), local_path),
+        (
+            "fetch",
+            "origin",
+            ("refs/heads/feature/foo:refs/remotes/origin/feature/foo",),
+            local_path,
+        ),
+        ("run-git", ("show-ref", "--verify", "--quiet", "refs/remotes/origin/feature/foo"), local_path, False),
+        ("push", cache_url, ("refs/remotes/origin/feature/foo:refs/heads/feature/foo",), local_path),
+    ]
+    assert remote_calls == [
+        (
+            "remote-git",
+            ("fetch", "gitsync", "refs/heads/feature/foo:refs/remotes/gitsync/feature/foo"),
+            True,
+        ),
+        ("remote-git", ("status", "--porcelain"), True),
+        ("remote-git", ("show-ref", "--verify", "--quiet", "refs/heads/feature/foo"), False),
+        ("remote-git", ("switch", "--track", "-c", "feature/foo", "gitsync/feature/foo"), True),
+    ]
+
+
+def test_checkout_project_stops_when_base_branch_is_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+    monkeypatch.setattr(sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
+    monkeypatch.setattr(sync.git, "run_git", lambda *args, **kwargs: _result(("git", "show-ref"), returncode=1))
+
+    with pytest.raises(sync.SyncError) as exc_info:
+        sync.checkout_project("myproject", "feature/foo", base_branch="develop")
+
+    message = str(exc_info.value)
+    assert "Origin branch does not exist: develop" in message
+    assert "git fetch origin" in message
+
+
+def test_checkout_project_stops_when_target_branch_already_exists(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+    monkeypatch.setattr(sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
+    monkeypatch.setattr(sync.git, "run_git", lambda *args, **kwargs: _result(("git", "show-ref")))
+
+    with pytest.raises(sync.SyncError) as exc_info:
+        sync.checkout_project("myproject", "feature/foo", base_branch="develop")
+
+    message = str(exc_info.value)
+    assert "Origin branch already exists: feature/foo" in message
+    assert "git-ssh-sync checkout myproject feature/foo" in message
+
+
 def test_checkout_project_stops_when_development_worktree_is_dirty(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
