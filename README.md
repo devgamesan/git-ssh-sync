@@ -89,7 +89,7 @@ https://github.com/example/myproject.git
 https://gitlab.com/example/myproject.git
 ```
 
-SSH 形式を使う場合、GitHub / GitLab へ接続するための SSH 鍵や認証設定はローカルマシン側に用意してください。開発環境から GitHub / GitLab へ直接接続する必要はありません。
+SSH 形式を使う場合、GitHub / GitLab へ接続するための SSH 鍵や認証設定はローカルマシン側に用意してください。開発環境から GitHub / GitLab へは直接接続しません。
 
 登録済みの設定を上書きする場合は `--force` を付けます。
 
@@ -118,7 +118,13 @@ git-ssh-sync clone myproject
 git-ssh-sync doctor myproject
 ```
 
-`clone` はローカルマシンに gateway repo を作成し、開発環境に cache repo と work repo を配置します。以後、開発環境では通常の Git リポジトリとして作業できます。
+`clone` はローカルマシンに gateway repo を作成し、開発環境に cache repo と work repo を配置します。
+
+- gateway repo: ローカルマシン上にある中継用リポジトリ
+- cache repo: 開発環境上にある bare リポジトリ
+- work repo: 開発環境上で実際に編集、ビルド、テスト、コミットを行うリポジトリ
+
+以後、開発環境では work repo を通常の Git リポジトリとして扱えます。
 
 `doctor` はローカル環境、SSH 接続、origin への fetch / push 権限、開発環境側のリポジトリ配置を確認します。初回だけでなく、同期がうまくいかない時にも最初に実行してください。
 
@@ -185,7 +191,7 @@ git commit -m "Implement foo"
 git-ssh-sync push myproject --branch feature/foo
 ```
 
-`checkout --base develop` は、origin の `develop` を元に `feature/foo` を作成し、開発環境の work repo をそのブランチへ切り替えます。すでに origin に同名ブランチがある場合は、`--base` なしで既存ブランチへ切り替えてください。
+`checkout --base develop` は、origin の `develop` を元に origin 上へ `feature/foo` を作成し、開発環境の work repo をそのブランチへ切り替えます。すでに origin に同名ブランチがある場合は、`--base` なしで既存ブランチへ切り替えてください。
 
 ## 状態確認
 
@@ -195,7 +201,7 @@ git-ssh-sync push myproject --branch feature/foo
 git-ssh-sync status myproject
 ```
 
-`status` は origin、ローカルマシン、開発環境のブランチと ahead / behind の状態を表示します。表示された recommendation に従って、必要に応じて `pull` または `push` を実行してください。
+`status` は、設定された既定ブランチについて origin と開発環境の ahead / behind、開発環境の現在ブランチ、作業ツリー状態を表示します。表示された recommendation に従って、必要に応じて `pull` または `push` を実行してください。
 
 ## 運用ルール
 
@@ -213,7 +219,7 @@ git-ssh-sync status myproject
 
 `push` は origin 側のブランチが開発環境側のブランチの祖先である場合だけ実行します。origin に未取得のコミットがある場合は停止します。
 
-分岐した場合は、先にローカルマシンで `pull` を実行し、開発環境で merge または rebase を行ってから、再度 `push` してください。
+分岐した場合は自動では解決しません。ローカルマシンで `pull` を実行して表示された手順に従い、開発環境で merge または rebase を行ってから、再度 `push` してください。
 
 ## よく使うコマンド
 
