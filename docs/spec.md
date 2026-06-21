@@ -114,8 +114,8 @@ git commit -m "message"
 GitHub / GitLabとの通信は手元マシンのみが担当する。
 
 ```bash
-git-ssh-sync pull myproject --branch main
-git-ssh-sync push myproject --branch main
+git-ssh-sync pull myproject
+git-ssh-sync push myproject
 ```
 
 ---
@@ -231,6 +231,7 @@ MVPで提供するコマンド。
 git-ssh-sync init
 git-ssh-sync clone
 git-ssh-sync status
+git-ssh-sync branch
 git-ssh-sync pull
 git-ssh-sync push
 git-ssh-sync checkout
@@ -258,8 +259,7 @@ git-ssh-sync init myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
   --dev-user user \
-  --dev-path /home/user/work/myproject \
-  --branch main
+  --dev-path /home/user/work/myproject
 ```
 
 ### 処理内容
@@ -270,7 +270,7 @@ git-ssh-sync init myproject \
 3. 開発環境側のwork repoパスを決定する
 4. 開発環境側のbare cache repoパスを決定する
 5. origin URLを保存する
-6. default branchを保存する
+6. 同期対象ブランチは保存せず、開発環境 work repo のカレントブランチを基準にする
 ```
 
 ---
@@ -292,7 +292,7 @@ git-ssh-sync clone myproject
 2. 開発環境にbare cache repoを作成する
 3. 手元マシンからbare cache repoへbranch / tagを転送する
 4. 開発環境にwork repoを作成する
-5. work repoでdefault branchをcheckoutする
+5. work repoでcurrent branchをcheckoutする
 6. work repoにcache repoをremoteとして登録する
 ```
 
@@ -361,7 +361,7 @@ State:
   origin is ahead of dev by 0 commits
 
 Recommendation:
-  git-ssh-sync push myproject --branch main
+  git-ssh-sync push myproject
 ```
 
 ### チェック項目
@@ -386,8 +386,10 @@ GitHub / GitLabの最新状態を開発環境へ反映する。
 ### 使用例
 
 ```bash
-git-ssh-sync pull myproject --branch main
+git-ssh-sync pull myproject
 ```
+
+`pull` は開発環境 work repo のカレントブランチを対象にする。
 
 ### 処理内容
 
@@ -445,8 +447,10 @@ or:
 ### 使用例
 
 ```bash
-git-ssh-sync push myproject --branch main
+git-ssh-sync push myproject
 ```
+
+`push` は開発環境 work repo のカレントブランチを対象にする。
 
 ### 処理内容
 
@@ -490,14 +494,36 @@ origin/main has commits that are not included in dev/main.
 
 Run:
 
-  git-ssh-sync pull myproject --branch main
+  git-ssh-sync pull myproject
 
 Then resolve merge or rebase on the development environment.
 ```
 
 ---
 
-## 9.6 `git-ssh-sync checkout`
+## 9.6 `git-ssh-sync branch`
+
+origin、開発環境 cache repo、開発環境 work repo のブランチ存在状況と ahead / behind を一覧する。
+
+### 使用例
+
+```bash
+git-ssh-sync branch myproject
+```
+
+### 処理内容
+
+```text
+1. 手元マシンでorigin fetchを実行する
+2. 開発環境 work repo のカレントブランチを取得する
+3. origin / cache repo / work repo のbranch一覧を取得する
+4. originとwork repoの両方に存在するbranchはahead / behindを計算する
+5. 読み取り専用の一覧として表示する
+```
+
+---
+
+## 9.7 `git-ssh-sync checkout`
 
 開発環境のwork repoでbranchを切り替える。
 
@@ -505,12 +531,12 @@ Then resolve merge or rebase on the development environment.
 
 ```bash
 git-ssh-sync checkout myproject feature/foo
-git-ssh-sync checkout myproject feature/foo --base develop
+git-ssh-sync checkout myproject -b feature/foo --base develop
 ```
 
 ### 処理内容
 
-`--base` を指定しない場合：
+既存ブランチへ切り替える場合：
 
 ```text
 1. 手元マシンでorigin fetchを実行する
@@ -521,21 +547,22 @@ git-ssh-sync checkout myproject feature/foo --base develop
 6. 開発環境work repoでgit switchする
 ```
 
-`--base <base-branch>` を指定する場合：
+`-b <new-branch>` を指定する場合：
 
 ```text
 1. 手元マシンでorigin fetchを実行する
-2. origin/<base-branch> が存在するか確認する
-3. origin/<new-branch> がまだ存在しないことを確認する
-4. origin/<base-branch> を起点に origin/<new-branch> を作成する
-5. new-branchのGitオブジェクトを開発環境cache repoへ転送する
-6. 開発環境work repoでfetchする
-7. working treeがdirtyでないことを確認する
-8. 開発環境work repoでgit switchする
+2. --baseが指定されていれば origin/<base-branch> が存在するか確認する
+3. --baseが未指定なら開発環境 work repo のカレントブランチをbaseにする
+4. origin/<new-branch> がまだ存在しないことを確認する
+5. base branchを起点に origin/<new-branch> を作成する
+6. new-branchのGitオブジェクトを開発環境cache repoへ転送する
+7. 開発環境work repoでfetchする
+8. working treeがdirtyでないことを確認する
+9. 開発環境work repoでgit switchする
 ```
 
-`--base` 指定時に `origin/<new-branch>` が既に存在する場合は停止する。
-既存branchへ切り替える場合は、`--base` を指定せずに `checkout` を実行する。
+`-b` 指定時に `origin/<new-branch>` が既に存在する場合は停止する。
+既存branchへ切り替える場合は、`-b` を指定せずに `checkout` を実行する。
 
 `origin/<base-branch>` が存在しない場合も停止する。
 
@@ -551,7 +578,7 @@ Commit or stash changes first.
 
 ---
 
-## 9.7 `git-ssh-sync doctor`
+## 9.8 `git-ssh-sync doctor`
 
 環境診断を行う。
 
@@ -590,7 +617,7 @@ git-ssh-sync doctor myproject
 ```text
 - Git LFSを使っていないか
 - submoduleを使っていないか
-- default branchが存在するか
+- current branchが存在するか
 - originとdevの履歴が接続しているか
 ```
 
@@ -622,8 +649,7 @@ version: 1
 projects:
   myproject:
     origin: git@github.com:example/myproject.git
-    default_branch: main
-
+    
     local:
       repo_path: ~/.git-ssh-sync/repos/myproject
 
@@ -1018,7 +1044,7 @@ Done.
 詳細表示：
 
 ```bash
-git-ssh-sync pull myproject --branch main --verbose
+git-ssh-sync pull myproject --verbose
 ```
 
 詳細表示時は実行コマンドも表示する。
@@ -1060,7 +1086,7 @@ git-ssh-sync doctor myproject
 手元マシン：
 
 ```bash
-git-ssh-sync pull myproject --branch main
+git-ssh-sync pull myproject
 ```
 
 開発環境：
@@ -1075,7 +1101,7 @@ git commit -m "Add feature"
 手元マシン：
 
 ```bash
-git-ssh-sync push myproject --branch main
+git-ssh-sync push myproject
 ```
 
 ---
@@ -1099,7 +1125,7 @@ git commit -m "Implement foo"
 手元マシン：
 
 ```bash
-git-ssh-sync push myproject --branch feature/foo
+git-ssh-sync push myproject
 ```
 
 ---

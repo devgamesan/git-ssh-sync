@@ -12,7 +12,6 @@ def _config(tmp_path: Path, *, sync_tags: bool = True) -> AppConfig:
     project = build_project_config(
         "myproject",
         origin="git@github.com:example/myproject.git",
-        default_branch="main",
         dev_host="devserver",
         dev_user="user",
         dev_work_path="/home/user/work/myproject",
@@ -32,6 +31,10 @@ def test_clone_project_runs_initial_layout_commands(
 
     def fake_run_git(args, **kwargs):
         calls.append(("git", (args, kwargs)))
+        if args == ["branch", "--show-current"]:
+            return CommandResult(
+                "local", ("git", *args), 0, "main\n", "", kwargs.get("cwd")
+            )
         return CommandResult("local", ("git", *args), 0, "", "", kwargs.get("cwd"))
 
     def fake_fetch(remote="origin", refspecs=(), **kwargs):
@@ -91,6 +94,7 @@ def test_clone_project_runs_initial_layout_commands(
             (["clone", "git@github.com:example/myproject.git", str(local_path)], {}),
         ),
         ("fetch", ("origin", (), {"cwd": local_path})),
+        ("git", (["branch", "--show-current"], {"cwd": local_path})),
         (
             "ssh",
             ("devserver", ("mkdir", "-p", "/home/user/cache repo"), {"user": "user"}),
@@ -158,7 +162,12 @@ def test_clone_project_skips_tags_when_disabled(
         clone.git,
         "run_git",
         lambda args, **kwargs: CommandResult(
-            "local", ("git", *args), 0, "", "", kwargs.get("cwd")
+            "local",
+            ("git", *args),
+            0,
+            "main\n" if args == ["branch", "--show-current"] else "",
+            "",
+            kwargs.get("cwd"),
         ),
     )
     monkeypatch.setattr(

@@ -11,7 +11,6 @@ from git_ssh_sync.doctor import DoctorError, DoctorReport
 def _project_config(local_path: Path) -> ProjectConfig:
     return ProjectConfig(
         origin="git@github.com:example/myproject.git",
-        default_branch="main",
         local=LocalConfig(repo_path=str(local_path)),
         dev=DevConfig(
             host="devserver",
@@ -45,6 +44,8 @@ def _install_successful_command_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
         command = tuple(args)
         if command == ("lfs", "ls-files"):
             return _result(("git", *args), "")
+        if command == ("branch", "--show-current"):
+            return _result(("git", *args), "main\n")
         return _result(("git", *args))
 
     def fake_run_ssh(host: str, command, *, user=None, check=True, **kwargs):
@@ -102,6 +103,8 @@ def test_inspect_project_doctor_warns_for_lfs_and_submodules(
     def fake_run_git(args, *, cwd=None, check=True, **kwargs):
         if tuple(args) == ("lfs", "ls-files"):
             return _result(("git", *args), returncode=1)
+        if tuple(args) == ("branch", "--show-current"):
+            return _result(("git", *args), "main\n")
         return _result(("git", *args))
 
     monkeypatch.setattr(doctor.git, "run_git", fake_run_git)

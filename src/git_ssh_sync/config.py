@@ -60,7 +60,6 @@ class ProjectConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     origin: str = Field(min_length=1)
-    default_branch: str = Field(min_length=1)
     local: LocalConfig
     dev: DevConfig
     options: OptionsConfig = Field(default_factory=OptionsConfig)
@@ -132,7 +131,6 @@ def build_project_config(
     project: str,
     *,
     origin: str | None,
-    default_branch: str,
     dev_host: str | None,
     dev_user: str | None,
     dev_work_path: str | None,
@@ -143,7 +141,6 @@ def build_project_config(
     """Build and validate a project config, applying init defaults."""
     raw: dict[str, Any] = {
         "origin": origin,
-        "default_branch": default_branch,
         "local": {
             "repo_path": local_repo_path or f"~/.git-ssh-sync/repos/{project}",
         },
@@ -195,7 +192,6 @@ def init_project(
     project: str,
     *,
     origin: str | None,
-    default_branch: str,
     dev_host: str | None,
     dev_user: str | None,
     dev_work_path: str | None,
@@ -207,7 +203,6 @@ def init_project(
     project_config = build_project_config(
         project,
         origin=origin,
-        default_branch=default_branch,
         dev_host=dev_host,
         dev_user=dev_user,
         dev_work_path=dev_work_path,
