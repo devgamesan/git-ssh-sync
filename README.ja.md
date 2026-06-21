@@ -10,6 +10,8 @@
 
 `git-ssh-sync` は、GitHub / GitLab に直接アクセスできない開発環境で作成した Git コミットを、ローカルマシン経由で外部 Git サービスへ同期するための CLI ツールです。
 
+このツールは、SSH や RDP などの限定されたインバウンド通信のみが許可され、アウトバウンド通信が制限されているニッチな環境（高セキュリティ企業のプロジェクトなど）を対象に設計されています。
+
 このツールはファイル同期ツールではありません。同期するのは Git オブジェクトとブランチです。ソース編集、ビルド、テスト、コミットは開発環境で行い、GitHub / GitLab との通信はローカルマシンで行います。
 
 ## 前提
@@ -100,6 +102,28 @@ git-ssh-sync init myproject \
   --dev-user user \
   --dev-path /home/user/work/myproject \
   --force
+```
+
+設定ファイルを直接開かなくても、登録済みプロジェクトを確認・整理できます。
+
+```bash
+# 登録済みプロジェクトを一覧表示
+git-ssh-sync config list
+
+# 1 つのプロジェクトの全設定を表示
+git-ssh-sync config show myproject
+
+# 指定した設定だけを更新
+git-ssh-sync config set myproject \
+  --origin git@github.com:example/myproject.git \
+  --dev-host devserver \
+  --dev-path /home/user/work/myproject
+
+# 確認後にプロジェクトを削除
+git-ssh-sync config remove myproject
+
+# 非対話でプロジェクトを削除
+git-ssh-sync config remove myproject --yes
 ```
 
 ## 初回 workflow
@@ -232,6 +256,12 @@ git-ssh-sync init myproject \
   --dev-host devserver \
   --dev-user user \
   --dev-path /home/user/work/myproject
+
+# 登録済みプロジェクト設定を一覧表示
+git-ssh-sync config list
+
+# 登録済みプロジェクト設定を表示
+git-ssh-sync config show myproject
 
 # 初回 clone
 git-ssh-sync clone myproject

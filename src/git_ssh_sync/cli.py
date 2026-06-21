@@ -4,15 +4,22 @@ from typing import Annotated
 
 import typer
 from rich.markup import escape
+from rich.table import Table
 
 from git_ssh_sync import __version__
 from git_ssh_sync.branch import BranchError, branch_project
 from git_ssh_sync.clone import CloneError, clone_project
 from git_ssh_sync.config import (
     ConfigError,
+    NoConfigUpdateError,
     ProjectAlreadyExistsError,
+    get_project,
+    list_project_names,
     default_config_path,
     init_project,
+    load_config,
+    remove_project,
+    update_project,
 )
 from git_ssh_sync.console import console
 from git_ssh_sync.doctor import DoctorError, doctor_project
@@ -25,6 +32,8 @@ app = typer.Typer(
     help="Sync Git commits through a local machine over SSH.",
     no_args_is_help=True,
 )
+config_app = typer.Typer(help="Manage registered project configuration.")
+app.add_typer(config_app, name="config")
 
 
 def _version_callback(value: bool) -> None:
@@ -53,6 +62,152 @@ def _not_implemented(command: str, project: str | None = None) -> None:
     console.print(
         f"[yellow]{command}[/yellow]{target} is defined, but the sync implementation is not available yet."
     )
+
+
+@config_app.command("list")
+def config_list_command() -> None:
+    """List registered projects."""
+    try:
+        config = load_config()
+    except ConfigError as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+    names = list_project_names(config)
+    if not names:
+        console.print("No projects configured.")
+        return
+
+    console.print("Configured projects:")
+    for name in names:
+        project_config = config.projects[name]
+        console.print(f"- {escape(name)}")
+        console.print(f"  origin: {escape(project_config.origin)}")
+        console.print(f"  local repo: {escape(project_config.local.repo_path)}")
+        console.print(f"  dev host: {escape(project_config.dev.host)}")
+        console.print(f"  dev path: {escape(project_config.dev.work_path)}")
+
+
+@config_app.command("show")
+def config_show_command(
+    project: Annotated[str, typer.Argument(help="Project name to show.")],
+) -> None:
+    """Show one registered project configuration."""
+    try:
+        project_config = get_project(load_config(), project)
+    except ConfigError as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+    table = Table(title=f"Project configuration: {escape(project)}")
+    table.add_column("Section", overflow="fold")
+    table.add_column("Name", overflow="fold")
+    table.add_column("Value", overflow="fold")
+    table.add_row("project", "name", escape(project))
+    table.add_row("origin", "url", escape(project_config.origin))
+    table.add_row("local", "repo_path", escape(project_config.local.repo_path))
+    table.add_row("dev", "host", escape(project_config.dev.host))
+    table.add_row("dev", "user", escape(project_config.dev.user))
+    table.add_row("dev", "work_path", escape(project_config.dev.work_path))
+    table.add_row("dev", "cache_path", escape(project_config.dev.cache_path))
+    table.add_row("options", "sync_tags", str(project_config.options.sync_tags))
+    table.add_row("options", "lfs", str(project_config.options.lfs))
+    table.add_row("options", "submodules", str(project_config.options.submodules))
+    table.add_row("options", "ff_only", str(project_config.options.ff_only))
+    console.print(table)
+
+
+@config_app.command("remove")
+def config_remove_command(
+    project: Annotated[str, typer.Argument(help="Project name to remove.")],
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Remove without confirmation."),
+    ] = False,
+) -> None:
+    """Remove a registered project configuration."""
+    if not yes and not typer.confirm(f"Remove project '{project}'?"):
+        console.print("Aborted.")
+        raise typer.Exit(code=1)
+
+    try:
+        remove_project(project)
+    except ConfigError as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+    console.print(f"Project '{project}' removed from {default_config_path()}")
+
+
+@config_app.command("set")
+def config_set_command(
+    project: Annotated[str, typer.Argument(help="Project name to update.")],
+    origin: Annotated[
+        str | None,
+        typer.Option("--origin", help="Origin Git URL."),
+    ] = None,
+    local_repo_path: Annotated[
+        str | None,
+        typer.Option("--local-repo-path", help="Local gateway repository path."),
+    ] = None,
+    dev_host: Annotated[
+        str | None,
+        typer.Option("--dev-host", help="Development environment SSH host."),
+    ] = None,
+    dev_user: Annotated[
+        str | None,
+        typer.Option("--dev-user", help="Development environment SSH user."),
+    ] = None,
+    dev_path: Annotated[
+        str | None,
+        typer.Option(
+            "--dev-path", help="Development environment work repository path."
+        ),
+    ] = None,
+    dev_cache_path: Annotated[
+        str | None,
+        typer.Option("--dev-cache-path", help="Development cache repository path."),
+    ] = None,
+    sync_tags: Annotated[
+        bool | None,
+        typer.Option("--sync-tags/--no-sync-tags", help="Enable or disable tag sync."),
+    ] = None,
+    lfs: Annotated[
+        bool | None,
+        typer.Option("--lfs/--no-lfs", help="Enable or disable Git LFS handling."),
+    ] = None,
+    submodules: Annotated[
+        bool | None,
+        typer.Option(
+            "--submodules/--no-submodules",
+            help="Enable or disable submodule handling.",
+        ),
+    ] = None,
+    ff_only: Annotated[
+        bool | None,
+        typer.Option("--ff-only/--no-ff-only", help="Enable or disable ff-only sync."),
+    ] = None,
+) -> None:
+    """Update one or more fields in a registered project configuration."""
+    try:
+        update_project(
+            project,
+            origin=origin,
+            local_repo_path=local_repo_path,
+            dev_host=dev_host,
+            dev_user=dev_user,
+            dev_work_path=dev_path,
+            dev_cache_path=dev_cache_path,
+            sync_tags=sync_tags,
+            lfs=lfs,
+            submodules=submodules,
+            ff_only=ff_only,
+        )
+    except (ConfigError, NoConfigUpdateError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+    console.print(f"Project '{project}' updated in {default_config_path()}")
 
 
 @app.command("init")

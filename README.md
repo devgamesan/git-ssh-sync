@@ -10,6 +10,8 @@
 
 `git-ssh-sync` is a CLI tool for synchronizing Git commits created in a development environment that cannot directly access GitHub/GitLab to external Git services via a local machine.
 
+This tool is designed for niche environments where outbound network access is restricted, such as high-security enterprises and projects that only allow limited inbound communication (e.g., SSH, RDP).
+
 This is not a file synchronization tool. It synchronizes Git objects and branches. Source editing, building, testing, and committing are performed in the development environment, while communication with GitHub/GitLab is handled by the local machine.
 
 ## Prerequisites
@@ -100,6 +102,28 @@ git-ssh-sync init myproject \
   --dev-user user \
   --dev-path /home/user/work/myproject \
   --force
+```
+
+You can inspect and maintain registered projects without opening the config file directly.
+
+```bash
+# List registered projects
+git-ssh-sync config list
+
+# Show all settings for one project
+git-ssh-sync config show myproject
+
+# Update selected settings
+git-ssh-sync config set myproject \
+  --origin git@github.com:example/myproject.git \
+  --dev-host devserver \
+  --dev-path /home/user/work/myproject
+
+# Remove a project after confirmation
+git-ssh-sync config remove myproject
+
+# Remove a project without an interactive prompt
+git-ssh-sync config remove myproject --yes
 ```
 
 ## Initial Workflow
@@ -232,6 +256,12 @@ git-ssh-sync init myproject \
   --dev-host devserver \
   --dev-user user \
   --dev-path /home/user/work/myproject
+
+# List registered project settings
+git-ssh-sync config list
+
+# Show registered project settings
+git-ssh-sync config show myproject
 
 # Initial clone
 git-ssh-sync clone myproject

@@ -18,6 +18,7 @@ def test_top_level_help() -> None:
     assert result.exit_code == 0
     assert "git-ssh-sync" in result.output
     for command in (
+        "config",
         "init",
         "clone",
         "status",
@@ -32,6 +33,7 @@ def test_top_level_help() -> None:
 
 def test_subcommand_help() -> None:
     for command in (
+        "config",
         "init",
         "clone",
         "status",
@@ -45,6 +47,190 @@ def test_subcommand_help() -> None:
 
         assert result.exit_code == 0
         assert command in result.output
+
+
+def test_config_list_command_lists_projects(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    runner.invoke(
+        app,
+        [
+            "init",
+            "myproject",
+            "--origin",
+            "git@github.com:example/myproject.git",
+            "--dev-host",
+            "devserver",
+            "--dev-user",
+            "user",
+            "--dev-path",
+            "/home/user/work/myproject",
+        ],
+    )
+
+    result = runner.invoke(app, ["config", "list"])
+
+    assert result.exit_code == 0
+    assert "myproject" in result.output
+    assert "git@github.com" in result.output
+    assert "myproject.git" in result.output
+    assert "devserver" in result.output
+
+
+def test_config_list_command_reports_empty_config(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = runner.invoke(app, ["config", "list"])
+
+    assert result.exit_code == 0
+    assert "No projects configured." in result.output
+
+
+def test_config_show_command_prints_project_details(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    runner.invoke(
+        app,
+        [
+            "init",
+            "myproject",
+            "--origin",
+            "git@github.com:example/myproject.git",
+            "--dev-host",
+            "devserver",
+            "--dev-user",
+            "user",
+            "--dev-path",
+            "/home/user/work/myproject",
+        ],
+    )
+
+    result = runner.invoke(app, ["config", "show", "myproject"])
+
+    assert result.exit_code == 0
+    assert "myproject" in result.output
+    assert "cache_path" in result.output
+    assert "sync_tags" in result.output
+
+
+def test_config_show_command_reports_missing_project(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = runner.invoke(app, ["config", "show", "missing"])
+
+    assert result.exit_code == 1
+    assert "Project 'missing' is not configured." in result.output
+
+
+def test_config_remove_command_requires_confirmation(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    runner.invoke(
+        app,
+        [
+            "init",
+            "myproject",
+            "--origin",
+            "git@github.com:example/myproject.git",
+            "--dev-host",
+            "devserver",
+            "--dev-user",
+            "user",
+            "--dev-path",
+            "/home/user/work/myproject",
+        ],
+    )
+
+    result = runner.invoke(app, ["config", "remove", "myproject"], input="n\n")
+
+    assert result.exit_code == 1
+    assert "Aborted." in result.output
+    assert get_project(load_config(default_config_path()), "myproject")
+
+
+def test_config_remove_command_removes_with_yes(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    runner.invoke(
+        app,
+        [
+            "init",
+            "myproject",
+            "--origin",
+            "git@github.com:example/myproject.git",
+            "--dev-host",
+            "devserver",
+            "--dev-user",
+            "user",
+            "--dev-path",
+            "/home/user/work/myproject",
+        ],
+    )
+
+    result = runner.invoke(app, ["config", "remove", "myproject", "--yes"])
+
+    assert result.exit_code == 0
+    assert "Project 'myproject' removed" in result.output
+    assert load_config(default_config_path()).projects == {}
+
+
+def test_config_set_command_updates_project(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    runner.invoke(
+        app,
+        [
+            "init",
+            "myproject",
+            "--origin",
+            "git@github.com:example/first.git",
+            "--dev-host",
+            "devserver",
+            "--dev-user",
+            "user",
+            "--dev-path",
+            "/home/user/work/myproject",
+        ],
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "config",
+            "set",
+            "myproject",
+            "--origin",
+            "git@github.com:example/second.git",
+            "--dev-host",
+            "devbox",
+            "--lfs",
+        ],
+    )
+
+    assert result.exit_code == 0
+    project = get_project(load_config(default_config_path()), "myproject")
+    assert project.origin == "git@github.com:example/second.git"
+    assert project.dev.host == "devbox"
+    assert project.options.lfs is True
+
+
+def test_config_set_command_requires_changes(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    runner.invoke(
+        app,
+        [
+            "init",
+            "myproject",
+            "--origin",
+            "git@github.com:example/myproject.git",
+            "--dev-host",
+            "devserver",
+            "--dev-user",
+            "user",
+            "--dev-path",
+            "/home/user/work/myproject",
+        ],
+    )
+
+    result = runner.invoke(app, ["config", "set", "myproject"])
+
+    assert result.exit_code == 1
+    assert "at least one" in result.output
 
 
 def test_init_command_creates_project_config(monkeypatch, tmp_path) -> None:
