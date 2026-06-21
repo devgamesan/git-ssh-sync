@@ -227,9 +227,17 @@ def _check_origin(local_path: Path, branch: str) -> list[DoctorCheck]:
 
 
 def _check_remote_path(
-    *, host: str, user: str, path: str, label: str, next_action: str
+    *,
+    host: str,
+    user: str,
+    path: str,
+    remote_os: ssh.RemoteOS,
+    label: str,
+    next_action: str,
 ) -> DoctorCheck:
-    result = ssh.run_ssh(host, ["test", "-d", path], user=user, check=False)
+    result = ssh.remote_path_exists(
+        host, path, user=user, remote_os=remote_os, path_type="directory"
+    )
     if result.returncode == 0:
         return _ok(
             "Development", label, f"{path} exists.", environment=result.environment
@@ -255,11 +263,12 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
     checks: list[DoctorCheck] = []
     host = project_config.dev.host
     user = project_config.dev.user
+    remote_os = project_config.dev.os
     work_path = project_config.dev.work_path
     cache_path = project_config.dev.cache_path
 
     try:
-        ssh.run_ssh(host, ["true"], user=user)
+        ssh.run_remote_command(host, ["true"], user=user, remote_os=remote_os)
     except CommandExecutionError as error:
         return [
             _error(
@@ -279,9 +288,7 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
         )
     )
 
-    git_result = ssh.run_ssh(
-        host, ["sh", "-lc", "command -v git"], user=user, check=False
-    )
+    git_result = ssh.remote_command_exists(host, "git", user=user, remote_os=remote_os)
     if git_result.returncode == 0:
         checks.append(
             _ok(
@@ -307,6 +314,7 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
             host=host,
             user=user,
             path=cache_path,
+            remote_os=remote_os,
             label="bare cache repo",
             next_action="Run git-ssh-sync clone for this project to create the cache repository.",
         )
@@ -316,13 +324,19 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
             host=host,
             user=user,
             path=work_path,
+            remote_os=remote_os,
             label="work repo",
             next_action="Run git-ssh-sync clone for this project to create the work repository.",
         )
     )
 
     branch = ssh.run_remote_git(
-        host, work_path, ["branch", "--show-current"], user=user, check=False
+        host,
+        work_path,
+        ["branch", "--show-current"],
+        user=user,
+        check=False,
+        remote_os=remote_os,
     )
     if branch.returncode == 0:
         checks.append(
@@ -345,11 +359,21 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
         )
 
     head = ssh.run_remote_git(
-        host, work_path, ["rev-parse", "--short", "HEAD"], user=user, check=False
+        host,
+        work_path,
+        ["rev-parse", "--short", "HEAD"],
+        user=user,
+        check=False,
+        remote_os=remote_os,
     )
     head_value = head.stdout.strip() if head.returncode == 0 else "unknown"
     status = ssh.run_remote_git(
-        host, work_path, ["status", "--porcelain"], user=user, check=False
+        host,
+        work_path,
+        ["status", "--porcelain"],
+        user=user,
+        check=False,
+        remote_os=remote_os,
     )
     if status.returncode == 0 and not status.stdout.strip():
         checks.append(
@@ -440,6 +464,7 @@ def _check_repository(project_config: ProjectConfig, branch: str) -> list[Doctor
         host=project_config.dev.host,
         user=project_config.dev.user,
         repo_path=project_config.dev.work_path,
+        remote_os=project_config.dev.os,
     )
     try:
         git.fetch(

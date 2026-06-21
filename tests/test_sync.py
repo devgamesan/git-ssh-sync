@@ -233,9 +233,11 @@ def test_pull_project_stops_when_development_head_is_detached(
     monkeypatch.setattr(
         sync.ssh,
         "run_remote_git",
-        lambda *args, **kwargs: _gitsync_url_result()
-        if tuple(args[2]) == ("remote", "get-url", "gitsync")
-        else _result(("ssh", "devserver"), ""),
+        lambda *args, **kwargs: (
+            _gitsync_url_result()
+            if tuple(args[2]) == ("remote", "get-url", "gitsync")
+            else _result(("ssh", "devserver"), "")
+        ),
     )
 
     with pytest.raises(sync.SyncError) as exc_info:
@@ -333,7 +335,9 @@ def test_checkout_project_creates_branch_from_base(
     monkeypatch.setattr(sync.git, "push", fake_push)
     monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
 
-    sync.checkout_project("myproject", "feature/foo", create=True, base_branch="develop")
+    sync.checkout_project(
+        "myproject", "feature/foo", create=True, base_branch="develop"
+    )
 
     cache_url = "ssh://user@devserver/home/user/cache%20repo/myproject.git"
     assert local_calls == [
@@ -624,9 +628,11 @@ def test_push_project_stops_when_development_head_is_detached(
     monkeypatch.setattr(
         sync.ssh,
         "run_remote_git",
-        lambda *args, **kwargs: _gitsync_url_result()
-        if tuple(args[2]) == ("remote", "get-url", "gitsync")
-        else _result(("ssh", "devserver"), ""),
+        lambda *args, **kwargs: (
+            _gitsync_url_result()
+            if tuple(args[2]) == ("remote", "get-url", "gitsync")
+            else _result(("ssh", "devserver"), "")
+        ),
     )
 
     with pytest.raises(sync.SyncError) as exc_info:
@@ -652,11 +658,13 @@ def test_push_project_reports_origin_push_failure(
     monkeypatch.setattr(
         sync.ssh,
         "run_remote_git",
-        lambda *args, **kwargs: _result(("ssh", "devserver"), "main\n")
-        if tuple(args[2]) == ("branch", "--show-current")
-        else _gitsync_url_result()
-        if tuple(args[2]) == ("remote", "get-url", "gitsync")
-        else _result(("ssh", "devserver")),
+        lambda *args, **kwargs: (
+            _result(("ssh", "devserver"), "main\n")
+            if tuple(args[2]) == ("branch", "--show-current")
+            else _gitsync_url_result()
+            if tuple(args[2]) == ("remote", "get-url", "gitsync")
+            else _result(("ssh", "devserver"))
+        ),
     )
 
     def fail_push(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):

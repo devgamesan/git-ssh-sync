@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -44,6 +44,7 @@ class DevConfig(BaseModel):
 
     host: str = Field(min_length=1)
     user: str = Field(min_length=1)
+    os: Literal["posix", "windows"] = "posix"
     work_path: str = Field(min_length=1)
     cache_path: str = Field(min_length=1)
 
@@ -156,6 +157,7 @@ def update_project(
     local_repo_path: str | None = None,
     dev_host: str | None = None,
     dev_user: str | None = None,
+    dev_os: Literal["posix", "windows"] | None = None,
     dev_work_path: str | None = None,
     dev_cache_path: str | None = None,
     sync_tags: bool | None = None,
@@ -181,6 +183,9 @@ def update_project(
         updated = True
     if dev_user is not None:
         raw["dev"]["user"] = dev_user
+        updated = True
+    if dev_os is not None:
+        raw["dev"]["os"] = dev_os
         updated = True
     if dev_work_path is not None:
         raw["dev"]["work_path"] = dev_work_path
@@ -223,6 +228,7 @@ def build_project_config(
     dev_host: str | None,
     dev_user: str | None,
     dev_work_path: str | None,
+    dev_os: Literal["posix", "windows"] = "posix",
     local_repo_path: str | None = None,
     dev_cache_path: str | None = None,
     options: OptionsConfig | None = None,
@@ -236,6 +242,7 @@ def build_project_config(
         "dev": {
             "host": dev_host,
             "user": dev_user,
+            "os": dev_os,
             "work_path": dev_work_path,
             "cache_path": dev_cache_path
             or f"/home/{dev_user}/.git-ssh-sync/cache/{project}.git",
@@ -284,6 +291,7 @@ def init_project(
     dev_host: str | None,
     dev_user: str | None,
     dev_work_path: str | None,
+    dev_os: Literal["posix", "windows"] = "posix",
     force: bool = False,
     config_path: Path | None = None,
 ) -> ProjectConfig:
@@ -294,6 +302,7 @@ def init_project(
         origin=origin,
         dev_host=dev_host,
         dev_user=dev_user,
+        dev_os=dev_os,
         dev_work_path=dev_work_path,
     )
     updated = register_project(config, project, project_config, force=force)

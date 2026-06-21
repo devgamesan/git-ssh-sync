@@ -79,7 +79,20 @@ git-ssh-sync init myproject \
 - `--origin`: GitHub / GitLab 側のリポジトリ URL
 - `--dev-host`: 開発環境の SSH ホスト
 - `--dev-user`: 開発環境の SSH ユーザー
+- `--dev-os`: 開発環境の OS。`posix` または `windows`（デフォルト: `posix`）
 - `--dev-path`: 開発環境上の work repo パス
+
+開発環境が Windows の場合は `--dev-os windows` を指定し、Windows パスを使います。
+Windows への SSH コマンドは PowerShell 経由で実行します。
+
+```powershell
+git-ssh-sync init myproject `
+  --origin git@github.com:example/myproject.git `
+  --dev-host devserver `
+  --dev-user user `
+  --dev-os windows `
+  --dev-path C:\Users\user\work\myproject
+```
 
 `--origin` には、`git clone` や `git fetch` で指定できるリモート URL を指定します。主な形式は次のとおりです。
 
@@ -117,6 +130,7 @@ git-ssh-sync config show myproject
 git-ssh-sync config set myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
+  --dev-os posix \
   --dev-path /home/user/work/myproject
 
 # 確認後にプロジェクトを削除

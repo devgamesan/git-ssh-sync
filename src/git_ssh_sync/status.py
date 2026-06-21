@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import quote
 
 from rich.markup import escape
 from rich.table import Table
@@ -38,17 +37,24 @@ class StatusReport:
     uses_submodules: bool
 
 
-def _ssh_repo_url(*, host: str, user: str, repo_path: str) -> str:
-    quoted_path = quote(repo_path, safe="/~")
-    return f"ssh://{user}@{host}{quoted_path}"
-
-
 def _clean_output(value: str) -> str:
     return value.strip()
 
 
-def _ensure_remote_work_repo(*, host: str, user: str, path: str) -> None:
-    result = ssh.run_ssh(host, ["test", "-d", path], user=user, check=False)
+def _ssh_repo_url(
+    *, host: str, user: str, repo_path: str, remote_os: ssh.RemoteOS = "posix"
+) -> str:
+    return ssh.remote_git_url(
+        host=host, user=user, repo_path=repo_path, remote_os=remote_os
+    )
+
+
+def _ensure_remote_work_repo(
+    *, host: str, user: str, path: str, remote_os: ssh.RemoteOS
+) -> None:
+    result = ssh.remote_path_exists(
+        host, path, user=user, remote_os=remote_os, path_type="directory"
+    )
     if result.returncode == 0:
         return
     if result.returncode == 1:
@@ -99,25 +105,34 @@ def inspect_project_status(project: str, project_config: ProjectConfig) -> Statu
     local_path = Path(project_config.local.repo_path)
     dev_host = project_config.dev.host
     dev_user = project_config.dev.user
+    dev_os = project_config.dev.os
     dev_work_path = project_config.dev.work_path
 
     if not local_path.exists():
         raise StatusError(f"[local] gateway repository does not exist: {local_path}")
 
     git.fetch("origin", cwd=local_path)
-    ssh.run_ssh(dev_host, ["true"], user=dev_user)
-    _ensure_remote_work_repo(host=dev_host, user=dev_user, path=dev_work_path)
+    ssh.run_remote_command(dev_host, ["true"], user=dev_user, remote_os=dev_os)
+    _ensure_remote_work_repo(
+        host=dev_host, user=dev_user, path=dev_work_path, remote_os=dev_os
+    )
 
     dev_branch = _clean_output(
         ssh.run_remote_git(
-            dev_host, dev_work_path, ["branch", "--show-current"], user=dev_user
+            dev_host,
+            dev_work_path,
+            ["branch", "--show-current"],
+            user=dev_user,
+            remote_os=dev_os,
         ).stdout
     )
     if not dev_branch:
         raise StatusError("Development work repository is in detached HEAD state.")
     branch = dev_branch
 
-    dev_repo_url = _ssh_repo_url(host=dev_host, user=dev_user, repo_path=dev_work_path)
+    dev_repo_url = _ssh_repo_url(
+        host=dev_host, user=dev_user, repo_path=dev_work_path, remote_os=dev_os
+    )
     git.fetch(
         dev_repo_url, [f"refs/heads/{branch}:refs/remotes/dev/{branch}"], cwd=local_path
     )
@@ -129,11 +144,19 @@ def inspect_project_status(project: str, project_config: ProjectConfig) -> Statu
 
     remote_head = _clean_output(
         ssh.run_remote_git(
-            dev_host, dev_work_path, ["log", "-1", "--format=%h %s"], user=dev_user
+            dev_host,
+            dev_work_path,
+            ["log", "-1", "--format=%h %s"],
+            user=dev_user,
+            remote_os=dev_os,
         ).stdout
     )
     remote_status = ssh.run_remote_git(
-        dev_host, dev_work_path, ["status", "--porcelain"], user=dev_user
+        dev_host,
+        dev_work_path,
+        ["status", "--porcelain"],
+        user=dev_user,
+        remote_os=dev_os,
     )
     origin_ahead, dev_ahead = _split_ahead_counts(
         git.rev_list(
