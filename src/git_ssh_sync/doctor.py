@@ -14,6 +14,7 @@ from git_ssh_sync import git, ssh
 from git_ssh_sync.config import ProjectConfig, get_project, load_config
 from git_ssh_sync.console import console
 from git_ssh_sync.errors import CommandExecutionError
+from git_ssh_sync.logging_config import logger
 from git_ssh_sync.status import _ssh_repo_url, _uses_lfs, _uses_submodules
 
 CheckStatus = Literal["ok", "warning", "error"]
@@ -495,6 +496,7 @@ def inspect_project_doctor(project: str, project_config: ProjectConfig) -> Docto
     local_path = Path(project_config.local.repo_path)
     checks: list[DoctorCheck] = []
 
+    logger.info("Running local command checks...")
     command_checks = _check_local_commands()
     checks.extend(command_checks)
     git_available = any(
@@ -514,14 +516,22 @@ def inspect_project_doctor(project: str, project_config: ProjectConfig) -> Docto
             checks=tuple(checks),
         )
 
+    logger.info("Checking gateway repository...")
     checks.extend(_check_gateway_repo(local_path))
 
     branch = "unknown"
     if local_path.exists():
         branch = _current_local_branch(local_path)
+        logger.info(f"Current branch: {branch}")
+
+        logger.info("Checking origin...")
         checks.extend(_check_origin(local_path, branch))
+
         if ssh_available:
+            logger.info("Checking development environment...")
             checks.extend(_check_development(project_config))
+
+            logger.info("Checking repository configuration...")
             checks.extend(_check_repository(project_config, branch))
 
     return DoctorReport(
@@ -582,7 +592,12 @@ def print_doctor(report: DoctorReport) -> None:
 
 def doctor_project(project: str) -> None:
     """Run and print diagnosis for a configured project."""
+    logger.info(f"Running doctor for project '{project}'")
     report = inspect_doctor(project)
     print_doctor(report)
+
     if report.has_errors:
+        logger.error(f"Doctor found errors for project '{project}'")
         raise DoctorError("Doctor found errors. See diagnostics above.")
+    else:
+        logger.info(f"Doctor checks passed for project '{project}'")

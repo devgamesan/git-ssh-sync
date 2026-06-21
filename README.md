@@ -288,6 +288,55 @@ git-ssh-sync checkout myproject -b feature/foo --base develop
 git-ssh-sync doctor myproject
 ```
 
+## Logging
+
+`git-ssh-sync` supports detailed logging for troubleshooting and monitoring synchronization operations.
+
+### Log Levels
+
+By default, only warnings and errors are displayed. You can increase verbosity using the following options:
+
+- `--verbose`, `-v`: Enable INFO level logging (operation progress, Git/SSH commands)
+- `--debug`, `-d`: Enable DEBUG level logging (all debug information, command output, stack traces)
+
+### Log File Output
+
+Logs are automatically saved to `~/.cache/git-ssh-sync/logs/git-ssh-sync.log`. The log file contains all log levels (DEBUG and above) regardless of console output settings.
+
+You can specify a custom log file path using `--log-file`:
+
+```bash
+git-ssh-sync pull myproject --log-file /tmp/my-sync.log
+```
+
+### Usage Examples
+
+```bash
+# Default (warnings and errors only)
+git-ssh-sync pull myproject
+
+# Verbose output (operation progress)
+git-ssh-sync pull myproject --verbose
+
+# Debug output (all details including command execution)
+git-ssh-sync pull myproject --debug
+
+# Verbose with custom log file
+git-ssh-sync push myproject --verbose --log-file /tmp/sync.log
+
+# Debug output for diagnostics
+git-ssh-sync doctor myproject --debug
+```
+
+### Log Content
+
+- **INFO**: Operation progress (pull/push/checkout), success messages
+- **DEBUG**: Git/SSH commands executed, return codes, stdout/stderr, working directories
+- **WARNING**: Recoverable issues (LFS, submodules detected)
+- **ERROR**: Failures, execution errors
+
+Logs are particularly useful when troubleshooting SSH connection issues, Git command failures, or understanding the synchronization flow.
+
 ## For Developers
 
 To develop this repository itself, install dependencies using `uv sync`.
