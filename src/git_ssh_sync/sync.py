@@ -19,6 +19,11 @@ def _cache_url(*, host: str, user: str, cache_path: str) -> str:
     return f"ssh://{user}@{host}{quoted_path}"
 
 
+def _work_url(project_config: ProjectConfig) -> str:
+    quoted_path = quote(project_config.dev.work_path, safe="/~")
+    return f"ssh://{project_config.dev.user}@{project_config.dev.host}{quoted_path}"
+
+
 def _clean_output(value: str) -> str:
     return value.strip()
 
@@ -122,6 +127,10 @@ def _remote_status(project_config: ProjectConfig) -> str:
     return _clean_output(result.stdout)
 
 
+def _fetch_dev_branch_to_local(project_config: ProjectConfig, local_path: Path, branch: str) -> None:
+    git.fetch(_work_url(project_config), [f"refs/heads/{branch}:refs/remotes/dev/{branch}"], cwd=local_path)
+
+
 def _dirty_error(project: str, project_config: ProjectConfig) -> SyncError:
     return SyncError(
         "Error: Development working tree is dirty.\n\n"
@@ -196,6 +205,40 @@ def _ensure_fast_forwardable(project: str, project_config: ProjectConfig, branch
     )
 
 
+def _ensure_pushable(project: str, project_config: ProjectConfig, local_path: Path, branch: str) -> None:
+    result = git.run_git(
+        ["merge-base", "--is-ancestor", f"refs/remotes/origin/{branch}", f"refs/remotes/dev/{branch}"],
+        cwd=local_path,
+        check=False,
+    )
+    if result.returncode == 0:
+        return
+    if result.returncode == 1:
+        current_branch = _remote_current_branch(project_config)
+        current_commit = _remote_short_head(project_config)
+        raise SyncError(
+            f"Cannot push {branch}.\n\n"
+            f"origin/{branch} has commits that are not included in dev/{branch}.\n\n"
+            f"Project:\n  {project}\n\n"
+            "Development:\n"
+            f"  host: {project_config.dev.host}\n"
+            f"  path: {project_config.dev.work_path}\n"
+            f"  branch: {current_branch}\n"
+            f"  commit: {current_commit}\n\n"
+            "Run:\n\n"
+            f"  git-ssh-sync pull {project} --branch {branch}\n\n"
+            "Then resolve the branch on the development environment before pushing again."
+        )
+    raise CommandExecutionError(
+        environment=result.environment,
+        command=result.command,
+        returncode=result.returncode,
+        cwd=result.cwd,
+        stdout=result.stdout,
+        stderr=result.stderr,
+    )
+
+
 def _load_project(project: str) -> ProjectConfig:
     return get_project(load_config(), project)
 
@@ -239,3 +282,25 @@ def checkout_project(project: str, branch: str) -> None:
     _fetch_dev_branch(project_config, branch)
     _ensure_dev_clean(project, project_config)
     _switch_to_branch(project_config, branch)
+
+
+def push_project(project: str, branch: str | None = None) -> None:
+    """Push development commits to origin when the branch has not diverged."""
+    project_config = _load_project(project)
+    selected_branch = _branch_or_default(project_config, branch)
+    local_path = Path(project_config.local.repo_path)
+
+    _ensure_gateway_repo(local_path)
+    git.fetch("origin", cwd=local_path)
+    _ensure_origin_branch(local_path, selected_branch)
+    _fetch_dev_branch_to_local(project_config, local_path, selected_branch)
+    _ensure_pushable(project, project_config, local_path, selected_branch)
+
+    try:
+        git.push("origin", [f"refs/remotes/dev/{selected_branch}:refs/heads/{selected_branch}"], cwd=local_path)
+    except CommandExecutionError as error:
+        raise SyncError(
+            f"Failed to push {selected_branch} to origin.\n\n"
+            f"Project:\n  {project}\n\n"
+            f"Origin push failed:\n{error}"
+        ) from error
