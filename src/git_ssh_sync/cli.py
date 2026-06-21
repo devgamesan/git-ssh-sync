@@ -179,10 +179,14 @@ def push_command(
 def checkout_command(
     project: Annotated[str, typer.Argument(help="Project name to update.")],
     branch: Annotated[str, typer.Argument(help="Branch to check out in the development repository.")],
+    base_branch: Annotated[
+        str | None,
+        typer.Option("--base", help="Create the branch from this origin branch before checking it out."),
+    ] = None,
 ) -> None:
     """Switch the development repository to a branch."""
     try:
-        checkout_project(project, branch)
+        checkout_project(project, branch, base_branch=base_branch)
     except (ConfigError, SyncError, CommandExecutionError) as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(code=1) from error

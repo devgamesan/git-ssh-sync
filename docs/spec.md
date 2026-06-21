@@ -527,9 +527,12 @@ Then resolve merge or rebase on the development environment.
 
 ```bash
 git-ssh-sync checkout myproject feature/foo
+git-ssh-sync checkout myproject feature/foo --base develop
 ```
 
 ### 処理内容
+
+`--base` を指定しない場合：
 
 ```text
 1. 手元マシンでorigin fetchを実行する
@@ -539,6 +542,24 @@ git-ssh-sync checkout myproject feature/foo
 5. working treeがdirtyでないことを確認する
 6. 開発環境work repoでgit switchする
 ```
+
+`--base <base-branch>` を指定する場合：
+
+```text
+1. 手元マシンでorigin fetchを実行する
+2. origin/<base-branch> が存在するか確認する
+3. origin/<new-branch> がまだ存在しないことを確認する
+4. origin/<base-branch> を起点に origin/<new-branch> を作成する
+5. new-branchのGitオブジェクトを開発環境cache repoへ転送する
+6. 開発環境work repoでfetchする
+7. working treeがdirtyでないことを確認する
+8. 開発環境work repoでgit switchする
+```
+
+`--base` 指定時に `origin/<new-branch>` が既に存在する場合は停止する。
+既存branchへ切り替える場合は、`--base` を指定せずに `checkout` を実行する。
+
+`origin/<base-branch>` が存在しない場合も停止する。
 
 ### dirty時の挙動
 

@@ -43,16 +43,12 @@ def _ensure_gateway_repo(path: Path) -> None:
         raise SyncError(f"[local] gateway repository does not exist: {path}")
 
 
-def _ensure_origin_branch(local_path: Path, branch: str) -> None:
+def _origin_branch_exists(local_path: Path, branch: str) -> bool:
     result = git.run_git(["show-ref", "--verify", "--quiet", f"refs/remotes/origin/{branch}"], cwd=local_path, check=False)
     if result.returncode == 0:
-        return
+        return True
     if result.returncode == 1:
-        raise SyncError(
-            f"Origin branch does not exist: {branch}\n\n"
-            "Run on the gateway repository:\n\n"
-            "  git fetch origin"
-        )
+        return False
     raise CommandExecutionError(
         environment=result.environment,
         command=result.command,
@@ -61,6 +57,29 @@ def _ensure_origin_branch(local_path: Path, branch: str) -> None:
         stdout=result.stdout,
         stderr=result.stderr,
     )
+
+
+def _ensure_origin_branch(local_path: Path, branch: str) -> None:
+    if not _origin_branch_exists(local_path, branch):
+        raise SyncError(
+            f"Origin branch does not exist: {branch}\n\n"
+            "Run on the gateway repository:\n\n"
+            "  git fetch origin"
+        )
+
+
+def _ensure_origin_branch_missing(project: str, local_path: Path, branch: str) -> None:
+    if _origin_branch_exists(local_path, branch):
+        raise SyncError(
+            f"Origin branch already exists: {branch}\n\n"
+            "Run checkout without --base to use the existing branch:\n\n"
+            f"  git-ssh-sync checkout {project} {branch}"
+        )
+
+
+def _create_origin_branch(local_path: Path, branch: str, base_branch: str) -> None:
+    git.push("origin", [f"refs/remotes/origin/{base_branch}:refs/heads/{branch}"], cwd=local_path)
+    git.fetch("origin", [f"refs/heads/{branch}:refs/remotes/origin/{branch}"], cwd=local_path)
 
 
 def _push_origin_branch_to_cache(project_config: ProjectConfig, local_path: Path, branch: str) -> None:
@@ -276,13 +295,17 @@ def pull_project(project: str, branch: str | None = None) -> None:
     _switch_to_branch(project_config, selected_branch)
 
 
-def checkout_project(project: str, branch: str) -> None:
+def checkout_project(project: str, branch: str, base_branch: str | None = None) -> None:
     """Switch the development repository to a branch from origin."""
     project_config = _load_project(project)
     local_path = Path(project_config.local.repo_path)
 
     _ensure_gateway_repo(local_path)
     git.fetch("origin", cwd=local_path)
+    if base_branch is not None:
+        _ensure_origin_branch(local_path, base_branch)
+        _ensure_origin_branch_missing(project, local_path, branch)
+        _create_origin_branch(local_path, branch, base_branch)
     _ensure_origin_branch(local_path, branch)
     _push_origin_branch_to_cache(project_config, local_path, branch)
     _fetch_dev_branch(project_config, branch)
