@@ -16,6 +16,7 @@ from git_ssh_sync.config import (
 from git_ssh_sync.console import console
 from git_ssh_sync.errors import CommandExecutionError
 from git_ssh_sync.status import StatusError, status_project
+from git_ssh_sync.sync import SyncError, checkout_project, pull_project
 
 app = typer.Typer(
     name="git-ssh-sync",
@@ -138,8 +139,13 @@ def pull_command(
     ] = None,
 ) -> None:
     """Fetch origin changes and fast-forward the development repository."""
-    _ = branch
-    _not_implemented("pull", project)
+    try:
+        pull_project(project, branch=branch)
+    except (ConfigError, SyncError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+    console.print(f"Project '{project}' pulled.")
 
 
 @app.command("push")
@@ -161,8 +167,13 @@ def checkout_command(
     branch: Annotated[str, typer.Argument(help="Branch to check out in the development repository.")],
 ) -> None:
     """Switch the development repository to a branch."""
-    _ = branch
-    _not_implemented("checkout", project)
+    try:
+        checkout_project(project, branch)
+    except (ConfigError, SyncError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+    console.print(f"Project '{project}' checked out {branch}.")
 
 
 @app.command("doctor")

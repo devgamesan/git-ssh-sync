@@ -121,9 +121,10 @@ def rev_parse(
     cwd: str | Path | None = None,
     env: Mapping[str, str] | None = None,
     verbose: bool = False,
+    check: bool = True,
 ) -> CommandResult:
     """Run `git rev-parse`."""
-    return run_git(["rev-parse", *revisions], cwd=cwd, env=env, verbose=verbose)
+    return run_git(["rev-parse", *revisions], cwd=cwd, env=env, verbose=verbose, check=check)
 
 
 def log_oneline(
