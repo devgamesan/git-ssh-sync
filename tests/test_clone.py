@@ -24,7 +24,9 @@ def _config(tmp_path: Path, *, sync_tags: bool = True) -> AppConfig:
     return AppConfig(projects={"myproject": project})
 
 
-def test_clone_project_runs_initial_layout_commands(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_clone_project_runs_initial_layout_commands(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     calls: list[tuple[str, object]] = []
     monkeypatch.setattr(clone, "load_config", lambda: _config(tmp_path))
 
@@ -34,20 +36,28 @@ def test_clone_project_runs_initial_layout_commands(monkeypatch: pytest.MonkeyPa
 
     def fake_fetch(remote="origin", refspecs=(), **kwargs):
         calls.append(("fetch", (remote, tuple(refspecs), kwargs)))
-        return CommandResult("local", ("git", "fetch", remote, *refspecs), 0, "", "", kwargs.get("cwd"))
+        return CommandResult(
+            "local", ("git", "fetch", remote, *refspecs), 0, "", "", kwargs.get("cwd")
+        )
 
     def fake_push(remote="origin", refspecs=(), **kwargs):
         calls.append(("push", (remote, tuple(refspecs), kwargs)))
-        return CommandResult("local", ("git", "push", remote, *refspecs), 0, "", "", kwargs.get("cwd"))
+        return CommandResult(
+            "local", ("git", "push", remote, *refspecs), 0, "", "", kwargs.get("cwd")
+        )
 
     def fake_run_ssh(host, command, **kwargs):
         calls.append(("ssh", (host, tuple(command), kwargs)))
         returncode = 1 if command[:2] == ["test", "-e"] else 0
-        return CommandResult(f"ssh:{kwargs['user']}@{host}", ("ssh", host, *command), returncode, "", "")
+        return CommandResult(
+            f"ssh:{kwargs['user']}@{host}", ("ssh", host, *command), returncode, "", ""
+        )
 
     def fake_run_remote_git(host, repo_path, args, **kwargs):
         calls.append(("remote_git", (host, str(repo_path), tuple(args), kwargs)))
-        return CommandResult(f"ssh:{kwargs['user']}@{host}", ("ssh", host, "git", *args), 0, "", "")
+        return CommandResult(
+            f"ssh:{kwargs['user']}@{host}", ("ssh", host, "git", *args), 0, "", ""
+        )
 
     monkeypatch.setattr(clone.git, "run_git", fake_run_git)
     monkeypatch.setattr(clone.git, "fetch", fake_fetch)
@@ -62,45 +72,94 @@ def test_clone_project_runs_initial_layout_commands(monkeypatch: pytest.MonkeyPa
     assert calls == [
         (
             "ssh",
-            ("devserver", ("test", "-e", "/home/user/cache repo/myproject.git"), {"user": "user", "check": False}),
+            (
+                "devserver",
+                ("test", "-e", "/home/user/cache repo/myproject.git"),
+                {"user": "user", "check": False},
+            ),
         ),
         (
             "ssh",
-            ("devserver", ("test", "-e", "/home/user/work/myproject"), {"user": "user", "check": False}),
+            (
+                "devserver",
+                ("test", "-e", "/home/user/work/myproject"),
+                {"user": "user", "check": False},
+            ),
         ),
-        ("git", (["clone", "git@github.com:example/myproject.git", str(local_path)], {})),
+        (
+            "git",
+            (["clone", "git@github.com:example/myproject.git", str(local_path)], {}),
+        ),
         ("fetch", ("origin", (), {"cwd": local_path})),
-        ("ssh", ("devserver", ("mkdir", "-p", "/home/user/cache repo"), {"user": "user"})),
         (
             "ssh",
-            ("devserver", ("git", "init", "--bare", "/home/user/cache repo/myproject.git"), {"user": "user"}),
+            ("devserver", ("mkdir", "-p", "/home/user/cache repo"), {"user": "user"}),
         ),
-        ("push", (cache_url, ("refs/remotes/origin/main:refs/heads/main",), {"cwd": local_path})),
+        (
+            "ssh",
+            (
+                "devserver",
+                ("git", "init", "--bare", "/home/user/cache repo/myproject.git"),
+                {"user": "user"},
+            ),
+        ),
+        (
+            "push",
+            (
+                cache_url,
+                ("refs/remotes/origin/main:refs/heads/main",),
+                {"cwd": local_path},
+            ),
+        ),
         ("push", (cache_url, ("--tags",), {"cwd": local_path})),
         ("ssh", ("devserver", ("mkdir", "-p", "/home/user/work"), {"user": "user"})),
         (
             "ssh",
             (
                 "devserver",
-                ("git", "clone", "/home/user/cache repo/myproject.git", "/home/user/work/myproject"),
+                (
+                    "git",
+                    "clone",
+                    "/home/user/cache repo/myproject.git",
+                    "/home/user/work/myproject",
+                ),
                 {"user": "user"},
             ),
         ),
         (
             "remote_git",
-            ("devserver", "/home/user/work/myproject", ("remote", "rename", "origin", "gitsync"), {"user": "user"}),
+            (
+                "devserver",
+                "/home/user/work/myproject",
+                ("remote", "rename", "origin", "gitsync"),
+                {"user": "user"},
+            ),
         ),
-        ("remote_git", ("devserver", "/home/user/work/myproject", ("switch", "main"), {"user": "user"})),
+        (
+            "remote_git",
+            (
+                "devserver",
+                "/home/user/work/myproject",
+                ("switch", "main"),
+                {"user": "user"},
+            ),
+        ),
     ]
 
 
-def test_clone_project_skips_tags_when_disabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_clone_project_skips_tags_when_disabled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     pushes = []
-    monkeypatch.setattr(clone, "load_config", lambda: _config(tmp_path, sync_tags=False))
+    monkeypatch.setattr(
+        clone, "load_config", lambda: _config(tmp_path, sync_tags=False)
+    )
     monkeypatch.setattr(
         clone.git,
         "run_git",
-        lambda args, **kwargs: CommandResult("local", ("git", *args), 0, "", "", kwargs.get("cwd")),
+        lambda args, **kwargs: CommandResult(
+            "local", ("git", *args), 0, "", "", kwargs.get("cwd")
+        ),
     )
     monkeypatch.setattr(
         clone.git,
@@ -112,7 +171,9 @@ def test_clone_project_skips_tags_when_disabled(monkeypatch: pytest.MonkeyPatch,
 
     def fake_push(remote="origin", refspecs=(), **kwargs):
         pushes.append(tuple(refspecs))
-        return CommandResult("local", ("git", "push", remote, *refspecs), 0, "", "", kwargs.get("cwd"))
+        return CommandResult(
+            "local", ("git", "push", remote, *refspecs), 0, "", "", kwargs.get("cwd")
+        )
 
     monkeypatch.setattr(clone.git, "push", fake_push)
     monkeypatch.setattr(
@@ -139,7 +200,9 @@ def test_clone_project_skips_tags_when_disabled(monkeypatch: pytest.MonkeyPatch,
     assert pushes == [("refs/remotes/origin/main:refs/heads/main",)]
 
 
-def test_clone_project_stops_when_local_path_exists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_clone_project_stops_when_local_path_exists(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     config = _config(tmp_path)
     Path(config.projects["myproject"].local.repo_path).mkdir(parents=True)
     monkeypatch.setattr(clone, "load_config", lambda: config)
@@ -148,7 +211,9 @@ def test_clone_project_stops_when_local_path_exists(monkeypatch: pytest.MonkeyPa
         clone.clone_project("myproject")
 
 
-def test_clone_project_stops_when_remote_path_exists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_clone_project_stops_when_remote_path_exists(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(clone, "load_config", lambda: _config(tmp_path))
     monkeypatch.setattr(
         clone.ssh,
@@ -158,7 +223,9 @@ def test_clone_project_stops_when_remote_path_exists(monkeypatch: pytest.MonkeyP
         ),
     )
 
-    with pytest.raises(clone.CloneError, match=r"\[ssh:user@devserver\] path already exists"):
+    with pytest.raises(
+        clone.CloneError, match=r"\[ssh:user@devserver\] path already exists"
+    ):
         clone.clone_project("myproject")
 
 
@@ -170,7 +237,11 @@ def test_clone_project_reports_unexpected_remote_check_failure(
         clone.ssh,
         "run_ssh",
         lambda host, command, **kwargs: CommandResult(
-            f"ssh:{kwargs['user']}@{host}", ("ssh", host, *command), 255, "", "ssh failed\n"
+            f"ssh:{kwargs['user']}@{host}",
+            ("ssh", host, *command),
+            255,
+            "",
+            "ssh failed\n",
         ),
     )
 

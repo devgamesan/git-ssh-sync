@@ -23,7 +23,9 @@ def _project_config(local_path: Path) -> ProjectConfig:
     )
 
 
-def _result(command: tuple[str, ...], stdout: str = "", returncode: int = 0, stderr: str = "") -> CommandResult:
+def _result(
+    command: tuple[str, ...], stdout: str = "", returncode: int = 0, stderr: str = ""
+) -> CommandResult:
     return CommandResult(
         environment="test",
         command=command,
@@ -35,7 +37,9 @@ def _result(command: tuple[str, ...], stdout: str = "", returncode: int = 0, std
 
 def _install_successful_command_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(doctor.shutil, "which", lambda command: f"/usr/bin/{command}")
-    monkeypatch.setattr(doctor.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
+    monkeypatch.setattr(
+        doctor.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch"))
+    )
 
     def fake_run_git(args, *, cwd=None, check=True, **kwargs):
         command = tuple(args)
@@ -48,7 +52,9 @@ def _install_successful_command_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
             return _result(("ssh", host), "/usr/bin/git\n")
         return _result(("ssh", host))
 
-    def fake_run_remote_git(host: str, repo_path: str, args, *, user=None, check=True, **kwargs):
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
         outputs = {
             ("branch", "--show-current"): "main\n",
             ("rev-parse", "--short", "HEAD"): "abc1234\n",
@@ -77,14 +83,19 @@ def test_inspect_project_doctor_collects_successful_checks(
     assert _by_name(report, "ssh command")[0].status == "ok"
     assert _by_name(report, "origin fetch")[0].status == "ok"
     assert _by_name(report, "origin push dry-run")[0].status == "ok"
-    assert _by_name(report, "working tree")[0].message == "Working tree is clean at abc1234."
+    assert (
+        _by_name(report, "working tree")[0].message
+        == "Working tree is clean at abc1234."
+    )
     assert _by_name(report, "history connection")[0].status == "ok"
 
 
 def test_inspect_project_doctor_warns_for_lfs_and_submodules(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    (tmp_path / ".gitattributes").write_text("*.bin filter=lfs diff=lfs merge=lfs -text\n", encoding="utf-8")
+    (tmp_path / ".gitattributes").write_text(
+        "*.bin filter=lfs diff=lfs merge=lfs -text\n", encoding="utf-8"
+    )
     (tmp_path / ".gitmodules").write_text("[submodule]\n", encoding="utf-8")
     _install_successful_command_fakes(monkeypatch)
 
@@ -111,7 +122,9 @@ def test_inspect_project_doctor_reports_dirty_worktree_next_action(
 ) -> None:
     _install_successful_command_fakes(monkeypatch)
 
-    def fake_run_remote_git(host: str, repo_path: str, args, *, user=None, check=True, **kwargs):
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
         outputs = {
             ("branch", "--show-current"): "main\n",
             ("rev-parse", "--short", "HEAD"): "abc1234\n",
@@ -127,7 +140,9 @@ def test_inspect_project_doctor_reports_dirty_worktree_next_action(
     assert report.has_errors is True
     assert dirty.status == "error"
     assert "abc1234" in dirty.message
-    assert dirty.next_action == "Commit or stash changes on the development environment."
+    assert (
+        dirty.next_action == "Commit or stash changes on the development environment."
+    )
 
 
 def test_inspect_project_doctor_reports_missing_gateway_repo(
@@ -135,7 +150,9 @@ def test_inspect_project_doctor_reports_missing_gateway_repo(
 ) -> None:
     monkeypatch.setattr(doctor.shutil, "which", lambda command: f"/usr/bin/{command}")
 
-    report = doctor.inspect_project_doctor("myproject", _project_config(tmp_path / "missing"))
+    report = doctor.inspect_project_doctor(
+        "myproject", _project_config(tmp_path / "missing")
+    )
 
     gateway = _by_name(report, "gateway repo")[0]
     assert report.has_errors is True
@@ -154,7 +171,9 @@ def test_inspect_project_doctor_stops_when_local_git_is_missing(
     monkeypatch.setattr(
         doctor.git,
         "run_git",
-        lambda *args, **kwargs: pytest.fail("git should not be executed when it is missing"),
+        lambda *args, **kwargs: pytest.fail(
+            "git should not be executed when it is missing"
+        ),
     )
 
     report = doctor.inspect_project_doctor("myproject", _project_config(tmp_path))
@@ -165,7 +184,9 @@ def test_inspect_project_doctor_stops_when_local_git_is_missing(
     assert "not found" in git_check.message
 
 
-def test_print_doctor_outputs_required_sections(capsys: pytest.CaptureFixture[str]) -> None:
+def test_print_doctor_outputs_required_sections(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     report = DoctorReport(
         project="myproject",
         branch="main",
@@ -193,7 +214,9 @@ def test_print_doctor_outputs_required_sections(capsys: pytest.CaptureFixture[st
     assert "Commit or stash changes" in output
 
 
-def test_doctor_project_raises_when_report_has_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_doctor_project_raises_when_report_has_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     report = DoctorReport(
         project="myproject",
         branch="main",

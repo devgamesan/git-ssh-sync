@@ -7,7 +7,9 @@ from git_ssh_sync import git
 from git_ssh_sync.errors import CommandExecutionError
 
 
-def test_fetch_runs_git_fetch_with_cwd_and_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_fetch_runs_git_fetch_with_cwd_and_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     calls = []
 
     def fake_run(command, **kwargs):
@@ -16,7 +18,9 @@ def test_fetch_runs_git_fetch_with_cwd_and_env(monkeypatch: pytest.MonkeyPatch, 
 
     monkeypatch.setattr(git.subprocess, "run", fake_run)
 
-    result = git.fetch("origin", ["main"], cwd=tmp_path, env={"GIT_SSH_COMMAND": "ssh -i key"})
+    result = git.fetch(
+        "origin", ["main"], cwd=tmp_path, env={"GIT_SSH_COMMAND": "ssh -i key"}
+    )
 
     assert result.environment == "local"
     assert result.command == ("git", "fetch", "origin", "main")
@@ -57,9 +61,13 @@ def test_git_wrappers_build_expected_commands(monkeypatch: pytest.MonkeyPatch) -
     ]
 
 
-def test_run_git_raises_contextual_error_on_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_run_git_raises_contextual_error_on_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     def fake_run(command, **kwargs):
-        return CompletedProcess(command, 128, stdout="", stderr="fatal: not a git repository\n")
+        return CompletedProcess(
+            command, 128, stdout="", stderr="fatal: not a git repository\n"
+        )
 
     monkeypatch.setattr(git.subprocess, "run", fake_run)
 
@@ -75,7 +83,9 @@ def test_run_git_raises_contextual_error_on_failure(monkeypatch: pytest.MonkeyPa
     assert "fatal: not a git repository" in str(error)
 
 
-def test_run_git_can_return_nonzero_result_without_check(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_git_can_return_nonzero_result_without_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def fake_run(command, **kwargs):
         return CompletedProcess(command, 1, stdout="", stderr="no match\n")
 
@@ -87,7 +97,9 @@ def test_run_git_can_return_nonzero_result_without_check(monkeypatch: pytest.Mon
     assert result.stderr == "no match\n"
 
 
-def test_verbose_prints_command(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_verbose_prints_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     def fake_run(command, **kwargs):
         return CompletedProcess(command, 0, stdout="", stderr="")
 

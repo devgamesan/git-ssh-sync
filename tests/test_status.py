@@ -23,7 +23,9 @@ def _project_config(local_path: Path) -> ProjectConfig:
     )
 
 
-def _result(command: tuple[str, ...], stdout: str = "", returncode: int = 0) -> CommandResult:
+def _result(
+    command: tuple[str, ...], stdout: str = "", returncode: int = 0
+) -> CommandResult:
     return CommandResult(
         environment="test",
         command=command,
@@ -93,20 +95,42 @@ def test_inspect_project_status_collects_origin_and_development_state(
         ("refs/heads/main:refs/remotes/dev/main",),
         tmp_path,
     ) in calls
-    assert ("rev-list", ("--left-right", "--count", "origin/main...dev/main"), tmp_path) in calls
+    assert (
+        "rev-list",
+        ("--left-right", "--count", "origin/main...dev/main"),
+        tmp_path,
+    ) in calls
 
 
 def test_inspect_project_status_detects_dirty_lfs_and_submodules(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    (tmp_path / ".gitattributes").write_text("*.bin filter=lfs diff=lfs merge=lfs -text\n", encoding="utf-8")
+    (tmp_path / ".gitattributes").write_text(
+        "*.bin filter=lfs diff=lfs merge=lfs -text\n", encoding="utf-8"
+    )
     (tmp_path / ".gitmodules").write_text("[submodule]\n", encoding="utf-8")
 
-    monkeypatch.setattr(status.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
-    monkeypatch.setattr(status.git, "log_oneline", lambda *args, **kwargs: _result(("git", "log"), "a1 Done\n"))
-    monkeypatch.setattr(status.git, "rev_list", lambda *args, **kwargs: _result(("git", "rev-list"), "1 0\n"))
-    monkeypatch.setattr(status.git, "run_git", lambda *args, **kwargs: _result(("git", "lfs"), returncode=1))
-    monkeypatch.setattr(status.ssh, "run_ssh", lambda *args, **kwargs: _result(("ssh", "devserver")))
+    monkeypatch.setattr(
+        status.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch"))
+    )
+    monkeypatch.setattr(
+        status.git,
+        "log_oneline",
+        lambda *args, **kwargs: _result(("git", "log"), "a1 Done\n"),
+    )
+    monkeypatch.setattr(
+        status.git,
+        "rev_list",
+        lambda *args, **kwargs: _result(("git", "rev-list"), "1 0\n"),
+    )
+    monkeypatch.setattr(
+        status.git,
+        "run_git",
+        lambda *args, **kwargs: _result(("git", "lfs"), returncode=1),
+    )
+    monkeypatch.setattr(
+        status.ssh, "run_ssh", lambda *args, **kwargs: _result(("ssh", "devserver"))
+    )
 
     def fake_run_remote_git(host: str, repo_path: str, args, *, user=None, **kwargs):
         outputs = {
@@ -127,10 +151,14 @@ def test_inspect_project_status_detects_dirty_lfs_and_submodules(
 
 def test_inspect_project_status_reports_missing_gateway_repo(tmp_path: Path) -> None:
     with pytest.raises(StatusError, match="gateway repository does not exist"):
-        status.inspect_project_status("myproject", _project_config(tmp_path / "missing"))
+        status.inspect_project_status(
+            "myproject", _project_config(tmp_path / "missing")
+        )
 
 
-def test_print_status_outputs_required_sections(capsys: pytest.CaptureFixture[str]) -> None:
+def test_print_status_outputs_required_sections(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     report = StatusReport(
         project="myproject",
         origin_url="git@github.com:example/myproject.git",
@@ -163,7 +191,9 @@ def test_print_status_outputs_required_sections(capsys: pytest.CaptureFixture[st
     assert "Git submodules" in output
 
 
-def test_recommendation_includes_required_branch_option(capsys: pytest.CaptureFixture[str]) -> None:
+def test_recommendation_includes_required_branch_option(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     report = StatusReport(
         project="myproject",
         origin_url="git@github.com:example/myproject.git",

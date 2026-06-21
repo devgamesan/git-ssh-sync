@@ -17,6 +17,7 @@ git-ssh-sync = "git_ssh_sync.cli:main"
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
+    "ruff>=0.15.18",
 ]
 
 [build-system]
@@ -26,3 +27,7 @@ build-backend = "uv_build"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+src = ["src", "tests"]

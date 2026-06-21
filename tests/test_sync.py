@@ -3,7 +3,13 @@ from pathlib import Path
 import pytest
 
 from git_ssh_sync import sync
-from git_ssh_sync.config import AppConfig, DevConfig, LocalConfig, OptionsConfig, ProjectConfig
+from git_ssh_sync.config import (
+    AppConfig,
+    DevConfig,
+    LocalConfig,
+    OptionsConfig,
+    ProjectConfig,
+)
 from git_ssh_sync.git import CommandResult
 from git_ssh_sync.errors import CommandExecutionError
 
@@ -27,7 +33,9 @@ def _app_config(local_path: Path) -> AppConfig:
     return AppConfig(projects={"myproject": _project_config(local_path)})
 
 
-def _result(command: tuple[str, ...], stdout: str = "", returncode: int = 0) -> CommandResult:
+def _result(
+    command: tuple[str, ...], stdout: str = "", returncode: int = 0
+) -> CommandResult:
     return CommandResult(
         environment="test",
         command=command,
@@ -37,7 +45,9 @@ def _result(command: tuple[str, ...], stdout: str = "", returncode: int = 0) -> 
     )
 
 
-def test_pull_project_fast_forwards_existing_branch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_pull_project_fast_forwards_existing_branch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     local_path = tmp_path / "gateway"
     local_path.mkdir()
     calls: list[tuple[str, object]] = []
@@ -56,7 +66,9 @@ def test_pull_project_fast_forwards_existing_branch(monkeypatch: pytest.MonkeyPa
         calls.append(("push", remote, tuple(refspecs), cwd))
         return _result(("git", "push"))
 
-    def fake_run_remote_git(host: str, repo_path: str, args, *, user=None, check=True, **kwargs):
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
         calls.append(("remote-git", host, repo_path, tuple(args), user, check))
         return _result(("ssh", host))
 
@@ -70,7 +82,12 @@ def test_pull_project_fast_forwards_existing_branch(monkeypatch: pytest.MonkeyPa
     cache_url = "ssh://user@devserver/home/user/cache%20repo/myproject.git"
     assert calls == [
         ("fetch", "origin", (), local_path),
-        ("run-git", ("show-ref", "--verify", "--quiet", "refs/remotes/origin/main"), local_path, False),
+        (
+            "run-git",
+            ("show-ref", "--verify", "--quiet", "refs/remotes/origin/main"),
+            local_path,
+            False,
+        ),
         ("push", cache_url, ("refs/remotes/origin/main:refs/heads/main",), local_path),
         (
             "remote-git",
@@ -92,7 +109,12 @@ def test_pull_project_fast_forwards_existing_branch(monkeypatch: pytest.MonkeyPa
             "remote-git",
             "devserver",
             "/home/user/work/myproject",
-            ("merge-base", "--is-ancestor", "refs/heads/main", "refs/remotes/gitsync/main"),
+            (
+                "merge-base",
+                "--is-ancestor",
+                "refs/heads/main",
+                "refs/remotes/gitsync/main",
+            ),
             "user",
             False,
         ),
@@ -104,7 +126,14 @@ def test_pull_project_fast_forwards_existing_branch(monkeypatch: pytest.MonkeyPa
             "user",
             False,
         ),
-        ("remote-git", "devserver", "/home/user/work/myproject", ("switch", "main"), "user", True),
+        (
+            "remote-git",
+            "devserver",
+            "/home/user/work/myproject",
+            ("switch", "main"),
+            "user",
+            True,
+        ),
         (
             "remote-git",
             "devserver",
@@ -116,20 +145,35 @@ def test_pull_project_fast_forwards_existing_branch(monkeypatch: pytest.MonkeyPa
     ]
 
 
-def test_pull_project_stops_when_branch_diverged(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_pull_project_stops_when_branch_diverged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     local_path = tmp_path / "gateway"
     local_path.mkdir()
     monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
-    monkeypatch.setattr(sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
-    monkeypatch.setattr(sync.git, "run_git", lambda *args, **kwargs: _result(("git", "show-ref")))
-    monkeypatch.setattr(sync.git, "push", lambda *args, **kwargs: _result(("git", "push")))
+    monkeypatch.setattr(
+        sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch"))
+    )
+    monkeypatch.setattr(
+        sync.git, "run_git", lambda *args, **kwargs: _result(("git", "show-ref"))
+    )
+    monkeypatch.setattr(
+        sync.git, "push", lambda *args, **kwargs: _result(("git", "push"))
+    )
 
-    def fake_run_remote_git(host: str, repo_path: str, args, *, user=None, check=True, **kwargs):
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
         outputs = {
             ("branch", "--show-current"): "main\n",
             ("rev-parse", "--short", "HEAD"): "abc1234\n",
         }
-        if tuple(args) == ("merge-base", "--is-ancestor", "refs/heads/main", "refs/remotes/gitsync/main"):
+        if tuple(args) == (
+            "merge-base",
+            "--is-ancestor",
+            "refs/heads/main",
+            "refs/remotes/gitsync/main",
+        ):
             return _result(("ssh", host), returncode=1)
         return _result(("ssh", host), outputs.get(tuple(args), ""))
 
@@ -162,11 +206,19 @@ def test_checkout_project_switches_new_branch_from_gitsync(
     calls: list[tuple[str, object]] = []
 
     monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
-    monkeypatch.setattr(sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
-    monkeypatch.setattr(sync.git, "run_git", lambda *args, **kwargs: _result(("git", "show-ref")))
-    monkeypatch.setattr(sync.git, "push", lambda *args, **kwargs: _result(("git", "push")))
+    monkeypatch.setattr(
+        sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch"))
+    )
+    monkeypatch.setattr(
+        sync.git, "run_git", lambda *args, **kwargs: _result(("git", "show-ref"))
+    )
+    monkeypatch.setattr(
+        sync.git, "push", lambda *args, **kwargs: _result(("git", "push"))
+    )
 
-    def fake_run_remote_git(host: str, repo_path: str, args, *, user=None, check=True, **kwargs):
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
         calls.append(("remote-git", tuple(args), check))
         if tuple(args) == ("status", "--porcelain"):
             return _result(("ssh", host), "")
@@ -178,7 +230,11 @@ def test_checkout_project_switches_new_branch_from_gitsync(
 
     sync.checkout_project("myproject", "feature/foo")
 
-    assert calls[-1] == ("remote-git", ("switch", "--track", "-c", "feature/foo", "gitsync/feature/foo"), True)
+    assert calls[-1] == (
+        "remote-git",
+        ("switch", "--track", "-c", "feature/foo", "gitsync/feature/foo"),
+        True,
+    )
 
 
 def test_checkout_project_creates_branch_from_base(
@@ -194,7 +250,9 @@ def test_checkout_project_creates_branch_from_base(
 
     def fake_fetch(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
         local_calls.append(("fetch", remote, tuple(refspecs), cwd))
-        if tuple(refspecs) == ("refs/heads/feature/foo:refs/remotes/origin/feature/foo",):
+        if tuple(refspecs) == (
+            "refs/heads/feature/foo:refs/remotes/origin/feature/foo",
+        ):
             origin_refs.add("feature/foo")
         return _result(("git", "fetch"))
 
@@ -209,7 +267,9 @@ def test_checkout_project_creates_branch_from_base(
         local_calls.append(("push", remote, tuple(refspecs), cwd))
         return _result(("git", "push"))
 
-    def fake_run_remote_git(host: str, repo_path: str, args, *, user=None, check=True, **kwargs):
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
         remote_calls.append(("remote-git", tuple(args), check))
         if tuple(args) == ("status", "--porcelain"):
             return _result(("ssh", host), "")
@@ -227,27 +287,64 @@ def test_checkout_project_creates_branch_from_base(
     cache_url = "ssh://user@devserver/home/user/cache%20repo/myproject.git"
     assert local_calls == [
         ("fetch", "origin", (), local_path),
-        ("run-git", ("show-ref", "--verify", "--quiet", "refs/remotes/origin/develop"), local_path, False),
-        ("run-git", ("show-ref", "--verify", "--quiet", "refs/remotes/origin/feature/foo"), local_path, False),
-        ("push", "origin", ("refs/remotes/origin/develop:refs/heads/feature/foo",), local_path),
+        (
+            "run-git",
+            ("show-ref", "--verify", "--quiet", "refs/remotes/origin/develop"),
+            local_path,
+            False,
+        ),
+        (
+            "run-git",
+            ("show-ref", "--verify", "--quiet", "refs/remotes/origin/feature/foo"),
+            local_path,
+            False,
+        ),
+        (
+            "push",
+            "origin",
+            ("refs/remotes/origin/develop:refs/heads/feature/foo",),
+            local_path,
+        ),
         (
             "fetch",
             "origin",
             ("refs/heads/feature/foo:refs/remotes/origin/feature/foo",),
             local_path,
         ),
-        ("run-git", ("show-ref", "--verify", "--quiet", "refs/remotes/origin/feature/foo"), local_path, False),
-        ("push", cache_url, ("refs/remotes/origin/feature/foo:refs/heads/feature/foo",), local_path),
+        (
+            "run-git",
+            ("show-ref", "--verify", "--quiet", "refs/remotes/origin/feature/foo"),
+            local_path,
+            False,
+        ),
+        (
+            "push",
+            cache_url,
+            ("refs/remotes/origin/feature/foo:refs/heads/feature/foo",),
+            local_path,
+        ),
     ]
     assert remote_calls == [
         (
             "remote-git",
-            ("fetch", "gitsync", "refs/heads/feature/foo:refs/remotes/gitsync/feature/foo"),
+            (
+                "fetch",
+                "gitsync",
+                "refs/heads/feature/foo:refs/remotes/gitsync/feature/foo",
+            ),
             True,
         ),
         ("remote-git", ("status", "--porcelain"), True),
-        ("remote-git", ("show-ref", "--verify", "--quiet", "refs/heads/feature/foo"), False),
-        ("remote-git", ("switch", "--track", "-c", "feature/foo", "gitsync/feature/foo"), True),
+        (
+            "remote-git",
+            ("show-ref", "--verify", "--quiet", "refs/heads/feature/foo"),
+            False,
+        ),
+        (
+            "remote-git",
+            ("switch", "--track", "-c", "feature/foo", "gitsync/feature/foo"),
+            True,
+        ),
     ]
 
 
@@ -258,8 +355,14 @@ def test_checkout_project_stops_when_base_branch_is_missing(
     local_path.mkdir()
 
     monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
-    monkeypatch.setattr(sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
-    monkeypatch.setattr(sync.git, "run_git", lambda *args, **kwargs: _result(("git", "show-ref"), returncode=1))
+    monkeypatch.setattr(
+        sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch"))
+    )
+    monkeypatch.setattr(
+        sync.git,
+        "run_git",
+        lambda *args, **kwargs: _result(("git", "show-ref"), returncode=1),
+    )
 
     with pytest.raises(sync.SyncError) as exc_info:
         sync.checkout_project("myproject", "feature/foo", base_branch="develop")
@@ -276,8 +379,12 @@ def test_checkout_project_stops_when_target_branch_already_exists(
     local_path.mkdir()
 
     monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
-    monkeypatch.setattr(sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
-    monkeypatch.setattr(sync.git, "run_git", lambda *args, **kwargs: _result(("git", "show-ref")))
+    monkeypatch.setattr(
+        sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch"))
+    )
+    monkeypatch.setattr(
+        sync.git, "run_git", lambda *args, **kwargs: _result(("git", "show-ref"))
+    )
 
     with pytest.raises(sync.SyncError) as exc_info:
         sync.checkout_project("myproject", "feature/foo", base_branch="develop")
@@ -293,11 +400,19 @@ def test_checkout_project_stops_when_development_worktree_is_dirty(
     local_path = tmp_path / "gateway"
     local_path.mkdir()
     monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
-    monkeypatch.setattr(sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
-    monkeypatch.setattr(sync.git, "run_git", lambda *args, **kwargs: _result(("git", "show-ref")))
-    monkeypatch.setattr(sync.git, "push", lambda *args, **kwargs: _result(("git", "push")))
+    monkeypatch.setattr(
+        sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch"))
+    )
+    monkeypatch.setattr(
+        sync.git, "run_git", lambda *args, **kwargs: _result(("git", "show-ref"))
+    )
+    monkeypatch.setattr(
+        sync.git, "push", lambda *args, **kwargs: _result(("git", "push"))
+    )
 
-    def fake_run_remote_git(host: str, repo_path: str, args, *, user=None, check=True, **kwargs):
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
         outputs = {
             ("status", "--porcelain"): " M app.py\n",
             ("branch", "--show-current"): "main\n",
@@ -317,7 +432,9 @@ def test_checkout_project_stops_when_development_worktree_is_dirty(
     assert "Commit or stash changes first." in message
 
 
-def test_pull_project_reports_missing_gateway_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_pull_project_reports_missing_gateway_repo(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(sync, "load_config", lambda: _app_config(tmp_path / "missing"))
 
     with pytest.raises(sync.SyncError, match="gateway repository does not exist"):
@@ -354,11 +471,21 @@ def test_push_project_pushes_dev_branch_when_origin_is_ancestor(
     work_url = "ssh://user@devserver/home/user/work/myproject"
     assert calls == [
         ("fetch", "origin", (), local_path),
-        ("run-git", ("show-ref", "--verify", "--quiet", "refs/remotes/origin/main"), local_path, False),
+        (
+            "run-git",
+            ("show-ref", "--verify", "--quiet", "refs/remotes/origin/main"),
+            local_path,
+            False,
+        ),
         ("fetch", work_url, ("refs/heads/main:refs/remotes/dev/main",), local_path),
         (
             "run-git",
-            ("merge-base", "--is-ancestor", "refs/remotes/origin/main", "refs/remotes/dev/main"),
+            (
+                "merge-base",
+                "--is-ancestor",
+                "refs/remotes/origin/main",
+                "refs/remotes/dev/main",
+            ),
             local_path,
             False,
         ),
@@ -373,7 +500,9 @@ def test_push_project_stops_when_origin_and_dev_diverged(
     local_path.mkdir()
 
     monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
-    monkeypatch.setattr(sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
+    monkeypatch.setattr(
+        sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch"))
+    )
 
     def fake_run_git(args, *, cwd=None, check=True, **kwargs):
         if tuple(args) == (
@@ -385,7 +514,9 @@ def test_push_project_stops_when_origin_and_dev_diverged(
             return _result(("git", *args), returncode=1)
         return _result(("git", *args))
 
-    def fake_run_remote_git(host: str, repo_path: str, args, *, user=None, check=True, **kwargs):
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
         outputs = {
             ("branch", "--show-current"): "main\n",
             ("rev-parse", "--short", "HEAD"): "abc1234\n",
@@ -415,13 +546,19 @@ def test_push_project_requires_branch() -> None:
     assert "git-ssh-sync push myproject --branch main" in message
 
 
-def test_push_project_reports_origin_push_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_push_project_reports_origin_push_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     local_path = tmp_path / "gateway"
     local_path.mkdir()
 
     monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
-    monkeypatch.setattr(sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
-    monkeypatch.setattr(sync.git, "run_git", lambda *args, **kwargs: _result(("git", "merge-base")))
+    monkeypatch.setattr(
+        sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch"))
+    )
+    monkeypatch.setattr(
+        sync.git, "run_git", lambda *args, **kwargs: _result(("git", "merge-base"))
+    )
 
     def fail_push(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
         raise CommandExecutionError(

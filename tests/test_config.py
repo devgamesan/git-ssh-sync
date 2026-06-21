@@ -13,7 +13,9 @@ from git_ssh_sync.config import (
 )
 
 
-def test_init_project_saves_defaults_and_expands_local_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_init_project_saves_defaults_and_expands_local_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     config_path = tmp_path / "config.yaml"
 
@@ -27,7 +29,9 @@ def test_init_project_saves_defaults_and_expands_local_path(tmp_path: Path, monk
         config_path=config_path,
     )
 
-    assert project.local.repo_path == str(tmp_path / ".git-ssh-sync" / "repos" / "myproject")
+    assert project.local.repo_path == str(
+        tmp_path / ".git-ssh-sync" / "repos" / "myproject"
+    )
     assert project.dev.cache_path == "/home/user/.git-ssh-sync/cache/myproject.git"
 
     loaded = load_config(config_path)
@@ -124,5 +128,7 @@ projects:
         encoding="utf-8",
     )
 
-    with pytest.raises(ConfigError, match="project 'myproject' field 'local.repo_path'"):
+    with pytest.raises(
+        ConfigError, match="project 'myproject' field 'local.repo_path'"
+    ):
         load_config(config_path)

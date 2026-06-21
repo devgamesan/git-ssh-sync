@@ -68,11 +68,17 @@ def clone_project(project: str) -> None:
     ssh.run_ssh(dev_host, ["git", "init", "--bare", cache_path], user=dev_user)
 
     remote_cache = _cache_url(host=dev_host, user=dev_user, cache_path=cache_path)
-    git.push(remote_cache, [f"refs/remotes/origin/{branch}:refs/heads/{branch}"], cwd=local_path)
+    git.push(
+        remote_cache,
+        [f"refs/remotes/origin/{branch}:refs/heads/{branch}"],
+        cwd=local_path,
+    )
     if project_config.options.sync_tags:
         git.push(remote_cache, ["--tags"], cwd=local_path)
 
     ssh.run_ssh(dev_host, ["mkdir", "-p", _remote_parent(work_path)], user=dev_user)
     ssh.run_ssh(dev_host, ["git", "clone", cache_path, work_path], user=dev_user)
-    ssh.run_remote_git(dev_host, work_path, ["remote", "rename", "origin", "gitsync"], user=dev_user)
+    ssh.run_remote_git(
+        dev_host, work_path, ["remote", "rename", "origin", "gitsync"], user=dev_user
+    )
     ssh.run_remote_git(dev_host, work_path, ["switch", branch], user=dev_user)
