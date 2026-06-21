@@ -201,7 +201,7 @@ git-ssh-sync push myproject --branch feature/foo
 git-ssh-sync status myproject
 ```
 
-`status` は、設定された既定ブランチについて origin と開発環境の ahead / behind、開発環境の現在ブランチ、作業ツリー状態を表示します。表示された recommendation に従って、必要に応じて `pull` または `push` を実行してください。
+`status` は、設定された既定ブランチのみを対象に、origin と開発環境の ahead / behind、開発環境の現在ブランチ、作業ツリー状態を表示します。任意ブランチを指定した状態確認にはまだ対応していません。表示された recommendation に従って、必要に応じて `pull` または `push` を実行してください。
 
 ## 運用ルール
 
