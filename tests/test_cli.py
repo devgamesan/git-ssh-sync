@@ -4,6 +4,7 @@ from git_ssh_sync import cli
 from git_ssh_sync.cli import app
 from git_ssh_sync.clone import CloneError
 from git_ssh_sync.config import default_config_path, get_project, load_config
+from git_ssh_sync.doctor import DoctorError
 from git_ssh_sync.status import StatusError
 from git_ssh_sync.sync import SyncError
 
@@ -126,6 +127,28 @@ def test_status_command_reports_status_error(monkeypatch) -> None:
 
     assert result.exit_code == 1
     assert "gateway repository does not exist" in result.output
+
+
+def test_doctor_command_runs_doctor_workflow(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(cli, "doctor_project", lambda project: calls.append(project))
+
+    result = runner.invoke(app, ["doctor", "myproject"])
+
+    assert result.exit_code == 0
+    assert calls == ["myproject"]
+
+
+def test_doctor_command_reports_doctor_error(monkeypatch) -> None:
+    def fail(project: str) -> None:
+        raise DoctorError("Doctor found errors.")
+
+    monkeypatch.setattr(cli, "doctor_project", fail)
+
+    result = runner.invoke(app, ["doctor", "myproject"])
+
+    assert result.exit_code == 1
+    assert "Doctor found errors." in result.output
 
 
 def test_pull_command_runs_pull_workflow(monkeypatch) -> None:
