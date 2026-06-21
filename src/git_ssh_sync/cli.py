@@ -14,6 +14,7 @@ from git_ssh_sync.config import (
     init_project,
 )
 from git_ssh_sync.console import console
+from git_ssh_sync.doctor import DoctorError, doctor_project
 from git_ssh_sync.errors import CommandExecutionError
 from git_ssh_sync.status import StatusError, status_project
 from git_ssh_sync.sync import SyncError, checkout_project, pull_project, push_project
@@ -199,7 +200,11 @@ def doctor_command(
     project: Annotated[str, typer.Argument(help="Project name to diagnose.")],
 ) -> None:
     """Check local, SSH, Git, and repository layout prerequisites."""
-    _not_implemented("doctor", project)
+    try:
+        doctor_project(project)
+    except (ConfigError, DoctorError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
 
 
 def main() -> None:
