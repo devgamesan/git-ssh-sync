@@ -2,7 +2,7 @@
 name = "git-ssh-sync"
 version = "0.1.0"
 description = "Sync Git commits through a local machine for development environments without direct GitHub or GitLab access."
-readme = "docs/spec.md"
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.13.4",

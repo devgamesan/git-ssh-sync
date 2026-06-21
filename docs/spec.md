@@ -22,17 +22,7 @@ git-ssh-sync
 git-ssh-sync
 ```
 
-## 2.3 Gitサブコマンドとしての呼び出し
-
-実行ファイル名を `git-ssh-sync` としてPATHに配置すると、Gitの外部サブコマンドとして以下のように呼び出せる。
-
-```bash
-git ssh-sync pull myproject
-git ssh-sync push myproject
-git ssh-sync status myproject
-```
-
-## 2.4 Pythonパッケージ名
+## 2.3 Pythonパッケージ名
 
 ```text
 PyPI package: git-ssh-sync
@@ -245,18 +235,6 @@ git-ssh-sync pull
 git-ssh-sync push
 git-ssh-sync checkout
 git-ssh-sync doctor
-```
-
-Gitサブコマンド形式では以下。
-
-```text
-git ssh-sync init
-git ssh-sync clone
-git ssh-sync status
-git ssh-sync pull
-git ssh-sync push
-git ssh-sync checkout
-git ssh-sync doctor
 ```
 
 ---
