@@ -28,8 +28,14 @@ def _clean_output(value: str) -> str:
     return value.strip()
 
 
-def _branch_or_default(project_config: ProjectConfig, branch: str | None) -> str:
-    return branch or project_config.default_branch
+def _require_branch(project: str, command: str, branch: str | None) -> str:
+    if branch:
+        return branch
+    raise SyncError(
+        f"`git-ssh-sync {command}` requires --branch <branch>.\n\n"
+        "Specify the branch explicitly:\n\n"
+        f"  git-ssh-sync {command} {project} --branch main"
+    )
 
 
 def _ensure_gateway_repo(path: Path) -> None:
@@ -245,8 +251,8 @@ def _load_project(project: str) -> ProjectConfig:
 
 def pull_project(project: str, branch: str | None = None) -> None:
     """Fetch origin changes and fast-forward the development repository."""
+    selected_branch = _require_branch(project, "pull", branch)
     project_config = _load_project(project)
-    selected_branch = _branch_or_default(project_config, branch)
     local_path = Path(project_config.local.repo_path)
 
     _ensure_gateway_repo(local_path)
@@ -286,8 +292,8 @@ def checkout_project(project: str, branch: str) -> None:
 
 def push_project(project: str, branch: str | None = None) -> None:
     """Push development commits to origin when the branch has not diverged."""
+    selected_branch = _require_branch(project, "push", branch)
     project_config = _load_project(project)
-    selected_branch = _branch_or_default(project_config, branch)
     local_path = Path(project_config.local.repo_path)
 
     _ensure_gateway_repo(local_path)

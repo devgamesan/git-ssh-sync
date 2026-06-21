@@ -134,9 +134,9 @@ def status_command(
 def pull_command(
     project: Annotated[str, typer.Argument(help="Project name to pull.")],
     branch: Annotated[
-        str | None,
-        typer.Option("--branch", help="Branch to pull. Defaults to the configured branch."),
-    ] = None,
+        str,
+        typer.Option("--branch", help="Branch to pull."),
+    ],
 ) -> None:
     """Fetch origin changes and fast-forward the development repository."""
     try:
@@ -152,9 +152,9 @@ def pull_command(
 def push_command(
     project: Annotated[str, typer.Argument(help="Project name to push.")],
     branch: Annotated[
-        str | None,
-        typer.Option("--branch", help="Branch to push. Defaults to the configured branch."),
-    ] = None,
+        str,
+        typer.Option("--branch", help="Branch to push."),
+    ],
 ) -> None:
     """Push development commits to origin when it is safe to do so."""
     try:
