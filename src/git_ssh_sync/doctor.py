@@ -89,7 +89,14 @@ def _check_local_commands() -> list[DoctorCheck]:
     for command in ("git", "ssh"):
         path = shutil.which(command)
         if path:
-            checks.append(_ok("Local", f"{command} command", f"{command} found at {path}", environment="local"))
+            checks.append(
+                _ok(
+                    "Local",
+                    f"{command} command",
+                    f"{command} found at {path}",
+                    environment="local",
+                )
+            )
         else:
             checks.append(
                 _error(
@@ -117,7 +124,14 @@ def _check_gateway_repo(local_path: Path) -> list[DoctorCheck]:
 
     result = git.run_git(["rev-parse", "--git-dir"], cwd=local_path, check=False)
     if result.returncode == 0:
-        return [_ok("Local", "gateway repo", "Gateway repository exists and is readable.", environment="local")]
+        return [
+            _ok(
+                "Local",
+                "gateway repo",
+                "Gateway repository exists and is readable.",
+                environment="local",
+            )
+        ]
     return [
         _error(
             "Local",
@@ -155,12 +169,23 @@ def _check_origin(local_path: Path, branch: str) -> list[DoctorCheck]:
                 next_action="Check origin URL, network access, and SSH credentials on the local machine.",
             )
         ]
-    checks.append(_ok("Local", "origin fetch", "origin fetch succeeded.", environment="local"))
+    checks.append(
+        _ok("Local", "origin fetch", "origin fetch succeeded.", environment="local")
+    )
 
     origin_ref = f"refs/remotes/origin/{branch}"
-    branch_result = git.run_git(["show-ref", "--verify", "--quiet", origin_ref], cwd=local_path, check=False)
+    branch_result = git.run_git(
+        ["show-ref", "--verify", "--quiet", origin_ref], cwd=local_path, check=False
+    )
     if branch_result.returncode == 0:
-        checks.append(_ok("Repository", "default branch", f"origin/{branch} exists.", environment="local"))
+        checks.append(
+            _ok(
+                "Repository",
+                "default branch",
+                f"origin/{branch} exists.",
+                environment="local",
+            )
+        )
     else:
         checks.append(
             _error(
@@ -179,7 +204,14 @@ def _check_origin(local_path: Path, branch: str) -> list[DoctorCheck]:
         check=False,
     )
     if dry_run.returncode == 0:
-        checks.append(_ok("Local", "origin push dry-run", "origin push dry-run succeeded.", environment="local"))
+        checks.append(
+            _ok(
+                "Local",
+                "origin push dry-run",
+                "origin push dry-run succeeded.",
+                environment="local",
+            )
+        )
     else:
         checks.append(
             _error(
@@ -193,10 +225,14 @@ def _check_origin(local_path: Path, branch: str) -> list[DoctorCheck]:
     return checks
 
 
-def _check_remote_path(*, host: str, user: str, path: str, label: str, next_action: str) -> DoctorCheck:
+def _check_remote_path(
+    *, host: str, user: str, path: str, label: str, next_action: str
+) -> DoctorCheck:
     result = ssh.run_ssh(host, ["test", "-d", path], user=user, check=False)
     if result.returncode == 0:
-        return _ok("Development", label, f"{path} exists.", environment=result.environment)
+        return _ok(
+            "Development", label, f"{path} exists.", environment=result.environment
+        )
     if result.returncode == 1:
         return _error(
             "Development",
@@ -233,9 +269,18 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
                 next_action="Fix SSH host, user, keys, or network access for the development environment.",
             )
         ]
-    checks.append(_ok("Development", "SSH connection", "SSH connection succeeded.", environment=f"ssh:{user}@{host}"))
+    checks.append(
+        _ok(
+            "Development",
+            "SSH connection",
+            "SSH connection succeeded.",
+            environment=f"ssh:{user}@{host}",
+        )
+    )
 
-    git_result = ssh.run_ssh(host, ["sh", "-lc", "command -v git"], user=user, check=False)
+    git_result = ssh.run_ssh(
+        host, ["sh", "-lc", "command -v git"], user=user, check=False
+    )
     if git_result.returncode == 0:
         checks.append(
             _ok(
@@ -275,7 +320,9 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
         )
     )
 
-    branch = ssh.run_remote_git(host, work_path, ["branch", "--show-current"], user=user, check=False)
+    branch = ssh.run_remote_git(
+        host, work_path, ["branch", "--show-current"], user=user, check=False
+    )
     if branch.returncode == 0:
         checks.append(
             _ok(
@@ -296,9 +343,13 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
             )
         )
 
-    head = ssh.run_remote_git(host, work_path, ["rev-parse", "--short", "HEAD"], user=user, check=False)
+    head = ssh.run_remote_git(
+        host, work_path, ["rev-parse", "--short", "HEAD"], user=user, check=False
+    )
     head_value = head.stdout.strip() if head.returncode == 0 else "unknown"
-    status = ssh.run_remote_git(host, work_path, ["status", "--porcelain"], user=user, check=False)
+    status = ssh.run_remote_git(
+        host, work_path, ["status", "--porcelain"], user=user, check=False
+    )
     if status.returncode == 0 and not status.stdout.strip():
         checks.append(
             _ok(
@@ -348,7 +399,14 @@ def _check_repository(project_config: ProjectConfig) -> list[DoctorCheck]:
             )
         )
     else:
-        checks.append(_ok("Repository", "Git LFS", "Git LFS was not detected.", environment="local"))
+        checks.append(
+            _ok(
+                "Repository",
+                "Git LFS",
+                "Git LFS was not detected.",
+                environment="local",
+            )
+        )
 
     if _uses_submodules(local_path):
         checks.append(
@@ -361,7 +419,14 @@ def _check_repository(project_config: ProjectConfig) -> list[DoctorCheck]:
             )
         )
     else:
-        checks.append(_ok("Repository", "submodules", "Git submodules were not detected.", environment="local"))
+        checks.append(
+            _ok(
+                "Repository",
+                "submodules",
+                "Git submodules were not detected.",
+                environment="local",
+            )
+        )
 
     dev_repo_url = _ssh_repo_url(
         host=project_config.dev.host,
@@ -369,7 +434,11 @@ def _check_repository(project_config: ProjectConfig) -> list[DoctorCheck]:
         repo_path=project_config.dev.work_path,
     )
     try:
-        git.fetch(dev_repo_url, [f"refs/heads/{branch}:refs/remotes/dev/{branch}"], cwd=local_path)
+        git.fetch(
+            dev_repo_url,
+            [f"refs/heads/{branch}:refs/remotes/dev/{branch}"],
+            cwd=local_path,
+        )
     except CommandExecutionError as error:
         checks.append(
             _error(
@@ -382,7 +451,9 @@ def _check_repository(project_config: ProjectConfig) -> list[DoctorCheck]:
         )
         return checks
 
-    connected = git.run_git(["merge-base", f"origin/{branch}", f"dev/{branch}"], cwd=local_path, check=False)
+    connected = git.run_git(
+        ["merge-base", f"origin/{branch}", f"dev/{branch}"], cwd=local_path, check=False
+    )
     if connected.returncode == 0:
         checks.append(
             _ok(
@@ -419,8 +490,12 @@ def inspect_project_doctor(project: str, project_config: ProjectConfig) -> Docto
 
     command_checks = _check_local_commands()
     checks.extend(command_checks)
-    git_available = any(check.name == "git command" and check.status == "ok" for check in command_checks)
-    ssh_available = any(check.name == "ssh command" and check.status == "ok" for check in command_checks)
+    git_available = any(
+        check.name == "git command" and check.status == "ok" for check in command_checks
+    )
+    ssh_available = any(
+        check.name == "ssh command" and check.status == "ok" for check in command_checks
+    )
 
     if not git_available:
         return DoctorReport(
@@ -455,7 +530,9 @@ def print_doctor(report: DoctorReport) -> None:
     console.print(f"Doctor report for [bold]{escape(report.project)}[/bold]")
     console.print(f"Default branch: {escape(report.branch)}")
     console.print(f"Origin: {escape(report.origin_url)}")
-    console.print(f"Development: {escape(report.dev_host)} {escape(report.dev_work_path)}")
+    console.print(
+        f"Development: {escape(report.dev_host)} {escape(report.dev_work_path)}"
+    )
     console.print()
 
     table = Table(show_header=True)
@@ -466,7 +543,11 @@ def print_doctor(report: DoctorReport) -> None:
     table.add_column("Message", overflow="fold")
     table.add_column("Next action", overflow="fold")
 
-    styles = {"ok": "[green]ok[/green]", "warning": "[yellow]warning[/yellow]", "error": "[red]error[/red]"}
+    styles = {
+        "ok": "[green]ok[/green]",
+        "warning": "[yellow]warning[/yellow]",
+        "error": "[red]error[/red]",
+    }
     for check in report.checks:
         table.add_row(
             escape(check.section),
@@ -478,12 +559,16 @@ def print_doctor(report: DoctorReport) -> None:
         )
     console.print(table)
 
-    actionable = [check for check in report.checks if check.status != "ok" and check.next_action]
+    actionable = [
+        check for check in report.checks if check.status != "ok" and check.next_action
+    ]
     if actionable:
         console.print()
         console.print("[bold]Actions[/bold]")
         for check in actionable:
-            console.print(f"- {escape(check.section)} / {escape(check.name)}: {escape(check.next_action or '')}")
+            console.print(
+                f"- {escape(check.section)} / {escape(check.name)}: {escape(check.next_action or '')}"
+            )
 
 
 def doctor_project(project: str) -> None:

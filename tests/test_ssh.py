@@ -8,7 +8,9 @@ from git_ssh_sync import ssh
 from git_ssh_sync.errors import CommandExecutionError
 
 
-def test_run_ssh_builds_target_and_quotes_remote_command(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_ssh_builds_target_and_quotes_remote_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = []
 
     def fake_run(command, **kwargs):
@@ -24,7 +26,9 @@ def test_run_ssh_builds_target_and_quotes_remote_command(monkeypatch: pytest.Mon
     assert calls[0][0] == ["ssh", "alice@devserver", "mkdir -p '/tmp/work repo'"]
 
 
-def test_run_remote_git_uses_git_dash_c_over_ssh(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_remote_git_uses_git_dash_c_over_ssh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = []
 
     def fake_run(command, **kwargs):
@@ -33,7 +37,12 @@ def test_run_remote_git_uses_git_dash_c_over_ssh(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(git.subprocess, "run", fake_run)
 
-    ssh.run_remote_git("devserver", Path("/home/alice/work repo"), ["status", "--porcelain"], user="alice")
+    ssh.run_remote_git(
+        "devserver",
+        Path("/home/alice/work repo"),
+        ["status", "--porcelain"],
+        user="alice",
+    )
 
     assert calls == [
         [
@@ -44,9 +53,13 @@ def test_run_remote_git_uses_git_dash_c_over_ssh(monkeypatch: pytest.MonkeyPatch
     ]
 
 
-def test_run_ssh_raises_contextual_error_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_ssh_raises_contextual_error_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def fake_run(command, **kwargs):
-        return CompletedProcess(command, 255, stdout="", stderr="ssh: Could not resolve hostname\n")
+        return CompletedProcess(
+            command, 255, stdout="", stderr="ssh: Could not resolve hostname\n"
+        )
 
     monkeypatch.setattr(git.subprocess, "run", fake_run)
 

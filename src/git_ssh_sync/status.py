@@ -52,7 +52,9 @@ def _ensure_remote_work_repo(*, host: str, user: str, path: str) -> None:
     if result.returncode == 0:
         return
     if result.returncode == 1:
-        raise StatusError(f"[{result.environment}] work repository does not exist: {path}")
+        raise StatusError(
+            f"[{result.environment}] work repository does not exist: {path}"
+        )
     raise CommandExecutionError(
         environment=result.environment,
         command=result.command,
@@ -108,7 +110,9 @@ def inspect_project_status(project: str, project_config: ProjectConfig) -> Statu
     _ensure_remote_work_repo(host=dev_host, user=dev_user, path=dev_work_path)
 
     dev_repo_url = _ssh_repo_url(host=dev_host, user=dev_user, repo_path=dev_work_path)
-    git.fetch(dev_repo_url, [f"refs/heads/{branch}:refs/remotes/dev/{branch}"], cwd=local_path)
+    git.fetch(
+        dev_repo_url, [f"refs/heads/{branch}:refs/remotes/dev/{branch}"], cwd=local_path
+    )
 
     origin_ref = f"origin/{branch}"
     dev_ref = f"dev/{branch}"
@@ -116,14 +120,22 @@ def inspect_project_status(project: str, project_config: ProjectConfig) -> Statu
     dev_head = _clean_output(git.log_oneline(dev_ref, cwd=local_path).stdout)
 
     dev_branch = _clean_output(
-        ssh.run_remote_git(dev_host, dev_work_path, ["branch", "--show-current"], user=dev_user).stdout
+        ssh.run_remote_git(
+            dev_host, dev_work_path, ["branch", "--show-current"], user=dev_user
+        ).stdout
     )
     remote_head = _clean_output(
-        ssh.run_remote_git(dev_host, dev_work_path, ["log", "-1", "--format=%h %s"], user=dev_user).stdout
+        ssh.run_remote_git(
+            dev_host, dev_work_path, ["log", "-1", "--format=%h %s"], user=dev_user
+        ).stdout
     )
-    remote_status = ssh.run_remote_git(dev_host, dev_work_path, ["status", "--porcelain"], user=dev_user)
+    remote_status = ssh.run_remote_git(
+        dev_host, dev_work_path, ["status", "--porcelain"], user=dev_user
+    )
     origin_ahead, dev_ahead = _split_ahead_counts(
-        git.rev_list(["--left-right", "--count", f"{origin_ref}...{dev_ref}"], cwd=local_path).stdout
+        git.rev_list(
+            ["--left-right", "--count", f"{origin_ref}...{dev_ref}"], cwd=local_path
+        ).stdout
     )
 
     return StatusReport(
@@ -182,7 +194,11 @@ def print_status(report: StatusReport) -> None:
     table.add_row("", "work path", escape(report.dev_work_path))
     table.add_row("", "branch", escape(report.dev_branch))
     table.add_row("", "head", escape(report.dev_head))
-    table.add_row("", "working tree", "clean" if report.dev_working_tree_clean else "[yellow]dirty[/yellow]")
+    table.add_row(
+        "",
+        "working tree",
+        "clean" if report.dev_working_tree_clean else "[yellow]dirty[/yellow]",
+    )
     table.add_row("", "", "")
     for index, line in enumerate(_state_lines(report)):
         table.add_row("State" if index == 0 else "", "", escape(line))
@@ -195,7 +211,9 @@ def print_status(report: StatusReport) -> None:
     if report.uses_lfs:
         console.print("[yellow]This repository appears to use Git LFS.[/yellow]")
         console.print("Git LFS object synchronization is not supported in v0.1.")
-        console.print("Normal Git commits may sync, but LFS file contents may be missing.")
+        console.print(
+            "Normal Git commits may sync, but LFS file contents may be missing."
+        )
     if report.uses_submodules:
         console.print("[yellow]This repository uses Git submodules.[/yellow]")
         console.print("Submodule synchronization is not supported in v0.1.")

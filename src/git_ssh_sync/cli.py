@@ -66,7 +66,9 @@ def init_command(
     project: Annotated[str, typer.Argument(help="Project name to register.")],
     origin: Annotated[
         str | None,
-        typer.Option("--origin", help="Origin Git URL, such as git@github.com:org/repo.git."),
+        typer.Option(
+            "--origin", help="Origin Git URL, such as git@github.com:org/repo.git."
+        ),
     ] = None,
     dev_host: Annotated[
         str | None,
@@ -78,7 +80,9 @@ def init_command(
     ] = None,
     dev_path: Annotated[
         str | None,
-        typer.Option("--dev-path", help="Development environment work repository path."),
+        typer.Option(
+            "--dev-path", help="Development environment work repository path."
+        ),
     ] = None,
     branch: Annotated[
         str,
@@ -179,10 +183,15 @@ def push_command(
 @app.command("checkout")
 def checkout_command(
     project: Annotated[str, typer.Argument(help="Project name to update.")],
-    branch: Annotated[str, typer.Argument(help="Branch to check out in the development repository.")],
+    branch: Annotated[
+        str, typer.Argument(help="Branch to check out in the development repository.")
+    ],
     base_branch: Annotated[
         str | None,
-        typer.Option("--base", help="Create the branch from this origin branch before checking it out."),
+        typer.Option(
+            "--base",
+            help="Create the branch from this origin branch before checking it out.",
+        ),
     ] = None,
 ) -> None:
     """Switch the development repository to a branch."""

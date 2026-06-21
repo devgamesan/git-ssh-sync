@@ -61,7 +61,9 @@ def test_init_command_creates_project_config(monkeypatch, tmp_path) -> None:
     assert project.dev.user == "user"
 
 
-def test_init_command_requires_force_for_existing_project(monkeypatch, tmp_path) -> None:
+def test_init_command_requires_force_for_existing_project(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     args = [
         "init",
@@ -153,7 +155,11 @@ def test_doctor_command_reports_doctor_error(monkeypatch) -> None:
 
 def test_pull_command_runs_pull_workflow(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(cli, "pull_project", lambda project, *, branch=None: calls.append((project, branch)))
+    monkeypatch.setattr(
+        cli,
+        "pull_project",
+        lambda project, *, branch=None: calls.append((project, branch)),
+    )
 
     result = runner.invoke(app, ["pull", "myproject", "--branch", "main"])
 
@@ -164,7 +170,11 @@ def test_pull_command_runs_pull_workflow(monkeypatch) -> None:
 
 def test_pull_command_requires_branch(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(cli, "pull_project", lambda project, *, branch=None: calls.append((project, branch)))
+    monkeypatch.setattr(
+        cli,
+        "pull_project",
+        lambda project, *, branch=None: calls.append((project, branch)),
+    )
 
     result = runner.invoke(app, ["pull", "myproject"])
 
@@ -187,7 +197,11 @@ def test_pull_command_reports_sync_error(monkeypatch) -> None:
 
 def test_push_command_runs_push_workflow(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(cli, "push_project", lambda project, *, branch=None: calls.append((project, branch)))
+    monkeypatch.setattr(
+        cli,
+        "push_project",
+        lambda project, *, branch=None: calls.append((project, branch)),
+    )
 
     result = runner.invoke(app, ["push", "myproject", "--branch", "main"])
 
@@ -198,7 +212,11 @@ def test_push_command_runs_push_workflow(monkeypatch) -> None:
 
 def test_push_command_requires_branch(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(cli, "push_project", lambda project, *, branch=None: calls.append((project, branch)))
+    monkeypatch.setattr(
+        cli,
+        "push_project",
+        lambda project, *, branch=None: calls.append((project, branch)),
+    )
 
     result = runner.invoke(app, ["push", "myproject"])
 
@@ -224,7 +242,9 @@ def test_checkout_command_runs_checkout_workflow(monkeypatch) -> None:
     monkeypatch.setattr(
         cli,
         "checkout_project",
-        lambda project, branch, *, base_branch=None: calls.append((project, branch, base_branch)),
+        lambda project, branch, *, base_branch=None: calls.append(
+            (project, branch, base_branch)
+        ),
     )
 
     result = runner.invoke(app, ["checkout", "myproject", "feature/foo"])
@@ -239,10 +259,14 @@ def test_checkout_command_passes_base_branch(monkeypatch) -> None:
     monkeypatch.setattr(
         cli,
         "checkout_project",
-        lambda project, branch, *, base_branch=None: calls.append((project, branch, base_branch)),
+        lambda project, branch, *, base_branch=None: calls.append(
+            (project, branch, base_branch)
+        ),
     )
 
-    result = runner.invoke(app, ["checkout", "myproject", "feature/foo", "--base", "develop"])
+    result = runner.invoke(
+        app, ["checkout", "myproject", "feature/foo", "--base", "develop"]
+    )
 
     assert result.exit_code == 0
     assert calls == [("myproject", "feature/foo", "develop")]

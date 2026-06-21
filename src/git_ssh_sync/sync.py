@@ -44,7 +44,11 @@ def _ensure_gateway_repo(path: Path) -> None:
 
 
 def _origin_branch_exists(local_path: Path, branch: str) -> bool:
-    result = git.run_git(["show-ref", "--verify", "--quiet", f"refs/remotes/origin/{branch}"], cwd=local_path, check=False)
+    result = git.run_git(
+        ["show-ref", "--verify", "--quiet", f"refs/remotes/origin/{branch}"],
+        cwd=local_path,
+        check=False,
+    )
     if result.returncode == 0:
         return True
     if result.returncode == 1:
@@ -78,17 +82,29 @@ def _ensure_origin_branch_missing(project: str, local_path: Path, branch: str) -
 
 
 def _create_origin_branch(local_path: Path, branch: str, base_branch: str) -> None:
-    git.push("origin", [f"refs/remotes/origin/{base_branch}:refs/heads/{branch}"], cwd=local_path)
-    git.fetch("origin", [f"refs/heads/{branch}:refs/remotes/origin/{branch}"], cwd=local_path)
+    git.push(
+        "origin",
+        [f"refs/remotes/origin/{base_branch}:refs/heads/{branch}"],
+        cwd=local_path,
+    )
+    git.fetch(
+        "origin", [f"refs/heads/{branch}:refs/remotes/origin/{branch}"], cwd=local_path
+    )
 
 
-def _push_origin_branch_to_cache(project_config: ProjectConfig, local_path: Path, branch: str) -> None:
+def _push_origin_branch_to_cache(
+    project_config: ProjectConfig, local_path: Path, branch: str
+) -> None:
     remote_cache = _cache_url(
         host=project_config.dev.host,
         user=project_config.dev.user,
         cache_path=project_config.dev.cache_path,
     )
-    git.push(remote_cache, [f"refs/remotes/origin/{branch}:refs/heads/{branch}"], cwd=local_path)
+    git.push(
+        remote_cache,
+        [f"refs/remotes/origin/{branch}:refs/heads/{branch}"],
+        cwd=local_path,
+    )
 
 
 def _fetch_dev_branch(project_config: ProjectConfig, branch: str) -> None:
@@ -152,8 +168,14 @@ def _remote_status(project_config: ProjectConfig) -> str:
     return _clean_output(result.stdout)
 
 
-def _fetch_dev_branch_to_local(project_config: ProjectConfig, local_path: Path, branch: str) -> None:
-    git.fetch(_work_url(project_config), [f"refs/heads/{branch}:refs/remotes/dev/{branch}"], cwd=local_path)
+def _fetch_dev_branch_to_local(
+    project_config: ProjectConfig, local_path: Path, branch: str
+) -> None:
+    git.fetch(
+        _work_url(project_config),
+        [f"refs/heads/{branch}:refs/remotes/dev/{branch}"],
+        cwd=local_path,
+    )
 
 
 def _dirty_error(project: str, project_config: ProjectConfig) -> SyncError:
@@ -192,11 +214,18 @@ def _switch_to_branch(project_config: ProjectConfig, branch: str) -> None:
     )
 
 
-def _ensure_fast_forwardable(project: str, project_config: ProjectConfig, branch: str) -> None:
+def _ensure_fast_forwardable(
+    project: str, project_config: ProjectConfig, branch: str
+) -> None:
     result = ssh.run_remote_git(
         project_config.dev.host,
         project_config.dev.work_path,
-        ["merge-base", "--is-ancestor", f"refs/heads/{branch}", f"refs/remotes/gitsync/{branch}"],
+        [
+            "merge-base",
+            "--is-ancestor",
+            f"refs/heads/{branch}",
+            f"refs/remotes/gitsync/{branch}",
+        ],
         user=project_config.dev.user,
         check=False,
     )
@@ -230,9 +259,16 @@ def _ensure_fast_forwardable(project: str, project_config: ProjectConfig, branch
     )
 
 
-def _ensure_pushable(project: str, project_config: ProjectConfig, local_path: Path, branch: str) -> None:
+def _ensure_pushable(
+    project: str, project_config: ProjectConfig, local_path: Path, branch: str
+) -> None:
     result = git.run_git(
-        ["merge-base", "--is-ancestor", f"refs/remotes/origin/{branch}", f"refs/remotes/dev/{branch}"],
+        [
+            "merge-base",
+            "--is-ancestor",
+            f"refs/remotes/origin/{branch}",
+            f"refs/remotes/dev/{branch}",
+        ],
         cwd=local_path,
         check=False,
     )
@@ -326,7 +362,11 @@ def push_project(project: str, branch: str | None = None) -> None:
     _ensure_pushable(project, project_config, local_path, selected_branch)
 
     try:
-        git.push("origin", [f"refs/remotes/dev/{selected_branch}:refs/heads/{selected_branch}"], cwd=local_path)
+        git.push(
+            "origin",
+            [f"refs/remotes/dev/{selected_branch}:refs/heads/{selected_branch}"],
+            cwd=local_path,
+        )
     except CommandExecutionError as error:
         raise SyncError(
             f"Failed to push {selected_branch} to origin.\n\n"

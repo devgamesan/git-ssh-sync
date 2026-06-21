@@ -124,7 +124,9 @@ def rev_parse(
     check: bool = True,
 ) -> CommandResult:
     """Run `git rev-parse`."""
-    return run_git(["rev-parse", *revisions], cwd=cwd, env=env, verbose=verbose, check=check)
+    return run_git(
+        ["rev-parse", *revisions], cwd=cwd, env=env, verbose=verbose, check=check
+    )
 
 
 def log_oneline(
@@ -135,7 +137,9 @@ def log_oneline(
     verbose: bool = False,
 ) -> CommandResult:
     """Run `git log -1 --format=%h %s` for a revision."""
-    return run_git(["log", "-1", "--format=%h %s", revision], cwd=cwd, env=env, verbose=verbose)
+    return run_git(
+        ["log", "-1", "--format=%h %s", revision], cwd=cwd, env=env, verbose=verbose
+    )
 
 
 def status_porcelain(

@@ -91,7 +91,9 @@ def format_validation_error(error: ValidationError) -> str:
         if len(loc) >= 3 and loc[0] == "projects":
             project = loc[1]
             project_field = ".".join(str(part) for part in loc[2:])
-            messages.append(f"project '{project}' field '{project_field}': {item['msg']}")
+            messages.append(
+                f"project '{project}' field '{project_field}': {item['msg']}"
+            )
         else:
             messages.append(f"field '{field}': {item['msg']}")
     return "Invalid configuration: " + "; ".join(messages)
@@ -149,14 +151,17 @@ def build_project_config(
             "host": dev_host,
             "user": dev_user,
             "work_path": dev_work_path,
-            "cache_path": dev_cache_path or f"/home/{dev_user}/.git-ssh-sync/cache/{project}.git",
+            "cache_path": dev_cache_path
+            or f"/home/{dev_user}/.git-ssh-sync/cache/{project}.git",
         },
         "options": (options or OptionsConfig()).model_dump(mode="json"),
     }
     try:
         return ProjectConfig.model_validate(raw)
     except ValidationError as error:
-        raise ConfigError(format_validation_error_for_project(project, error)) from error
+        raise ConfigError(
+            format_validation_error_for_project(project, error)
+        ) from error
 
 
 def format_validation_error_for_project(project: str, error: ValidationError) -> str:
@@ -177,7 +182,9 @@ def register_project(
 ) -> AppConfig:
     """Register or update a project in an app config."""
     if project in config.projects and not force:
-        raise ProjectAlreadyExistsError(f"Project '{project}' already exists. Use --force to overwrite it.")
+        raise ProjectAlreadyExistsError(
+            f"Project '{project}' already exists. Use --force to overwrite it."
+        )
 
     projects = dict(config.projects)
     projects[project] = project_config
