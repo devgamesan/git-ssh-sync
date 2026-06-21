@@ -266,6 +266,16 @@ To develop this repository itself, install dependencies using `uv sync`.
 uv sync
 ```
 
+To install from TestPyPI:
+
+```bash
+uv tool install \
+  --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple/ \
+  --index-strategy unsafe-best-match \
+  git-ssh-sync
+```
+
 To execute the CLI during development, you can run it via `uv run`.
 
 ```bash

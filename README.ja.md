@@ -266,6 +266,16 @@ git-ssh-sync doctor myproject
 uv sync
 ```
 
+TestPyPI からインストールする場合:
+
+```bash
+uv tool install \
+  --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple/ \
+  --index-strategy unsafe-best-match \
+  git-ssh-sync
+```
+
 開発中に CLI を実行する場合は、`uv run` 経由で実行できます。
 
 ```bash
