@@ -4,12 +4,15 @@ import pytest
 
 from git_ssh_sync.config import (
     ConfigError,
+    NoConfigUpdateError,
     ProjectAlreadyExistsError,
     build_project_config,
     get_project,
     init_project,
     load_config,
+    remove_project,
     register_project,
+    update_project,
 )
 
 
@@ -83,6 +86,67 @@ def test_init_project_force_overwrites_existing_project(tmp_path: Path) -> None:
     project = get_project(load_config(config_path), "myproject")
 
     assert project.origin == "git@github.com:example/second.git"
+
+
+def test_remove_project_deletes_existing_project(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    init_project(
+        "myproject",
+        origin="git@github.com:example/myproject.git",
+        dev_host="devserver",
+        dev_user="user",
+        dev_work_path="/home/user/work/myproject",
+        config_path=config_path,
+    )
+
+    remove_project("myproject", config_path=config_path)
+
+    assert load_config(config_path).projects == {}
+
+
+def test_update_project_changes_selected_fields(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    init_project(
+        "myproject",
+        origin="git@github.com:example/first.git",
+        dev_host="devserver",
+        dev_user="user",
+        dev_work_path="/home/user/work/myproject",
+        config_path=config_path,
+    )
+
+    updated = update_project(
+        "myproject",
+        origin="git@github.com:example/second.git",
+        dev_host="devbox",
+        dev_work_path="/home/user/src/myproject",
+        lfs=True,
+        config_path=config_path,
+    )
+
+    assert updated.origin == "git@github.com:example/second.git"
+    assert updated.dev.host == "devbox"
+    assert updated.dev.user == "user"
+    assert updated.dev.work_path == "/home/user/src/myproject"
+    assert updated.options.lfs is True
+
+    loaded = get_project(load_config(config_path), "myproject")
+    assert loaded.origin == "git@github.com:example/second.git"
+
+
+def test_update_project_requires_at_least_one_change(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    init_project(
+        "myproject",
+        origin="git@github.com:example/myproject.git",
+        dev_host="devserver",
+        dev_user="user",
+        dev_work_path="/home/user/work/myproject",
+        config_path=config_path,
+    )
+
+    with pytest.raises(NoConfigUpdateError, match="at least one"):
+        update_project("myproject", config_path=config_path)
 
 
 def test_missing_required_fields_include_project_and_field_names() -> None:

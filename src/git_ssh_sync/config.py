@@ -23,6 +23,10 @@ class ProjectNotFoundError(ConfigError):
     """Raised when a project is not registered."""
 
 
+class NoConfigUpdateError(ConfigError):
+    """Raised when no project configuration updates were provided."""
+
+
 def _expand_path(value: str) -> str:
     return str(Path(value).expanduser())
 
@@ -125,6 +129,91 @@ def get_project(config: AppConfig, project: str) -> ProjectConfig:
         return config.projects[project]
     except KeyError as error:
         raise ProjectNotFoundError(f"Project '{project}' is not configured.") from error
+
+
+def list_project_names(config: AppConfig) -> list[str]:
+    """Return configured project names sorted for stable CLI output."""
+    return sorted(config.projects)
+
+
+def remove_project(
+    project: str,
+    *,
+    config_path: Path | None = None,
+) -> None:
+    """Remove a project from config.yaml."""
+    config = load_config(config_path)
+    get_project(config, project)
+    projects = dict(config.projects)
+    del projects[project]
+    save_config(config.model_copy(update={"projects": projects}), config_path)
+
+
+def update_project(
+    project: str,
+    *,
+    origin: str | None = None,
+    local_repo_path: str | None = None,
+    dev_host: str | None = None,
+    dev_user: str | None = None,
+    dev_work_path: str | None = None,
+    dev_cache_path: str | None = None,
+    sync_tags: bool | None = None,
+    lfs: bool | None = None,
+    submodules: bool | None = None,
+    ff_only: bool | None = None,
+    config_path: Path | None = None,
+) -> ProjectConfig:
+    """Partially update an existing project in config.yaml."""
+    config = load_config(config_path)
+    current = get_project(config, project)
+    raw = current.model_dump(mode="json")
+
+    updated = False
+    if origin is not None:
+        raw["origin"] = origin
+        updated = True
+    if local_repo_path is not None:
+        raw["local"]["repo_path"] = local_repo_path
+        updated = True
+    if dev_host is not None:
+        raw["dev"]["host"] = dev_host
+        updated = True
+    if dev_user is not None:
+        raw["dev"]["user"] = dev_user
+        updated = True
+    if dev_work_path is not None:
+        raw["dev"]["work_path"] = dev_work_path
+        updated = True
+    if dev_cache_path is not None:
+        raw["dev"]["cache_path"] = dev_cache_path
+        updated = True
+
+    for key, value in {
+        "sync_tags": sync_tags,
+        "lfs": lfs,
+        "submodules": submodules,
+        "ff_only": ff_only,
+    }.items():
+        if value is not None:
+            raw["options"][key] = value
+            updated = True
+
+    if not updated:
+        raise NoConfigUpdateError("Specify at least one setting to update.")
+
+    try:
+        updated_project = ProjectConfig.model_validate(raw)
+    except ValidationError as error:
+        raise ConfigError(
+            format_validation_error_for_project(project, error)
+        ) from error
+
+    save_config(
+        register_project(config, project, updated_project, force=True),
+        config_path,
+    )
+    return updated_project
 
 
 def build_project_config(
