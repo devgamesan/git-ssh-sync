@@ -250,16 +250,6 @@ git-ssh-sync checkout myproject feature/foo --base develop
 git-ssh-sync doctor myproject
 ```
 
-## Git サブコマンドとして使う場合
-
-`git-ssh-sync` が `PATH` にある場合は、Git の外部サブコマンドとしても呼び出せます。
-
-```bash
-git ssh-sync pull myproject --branch main
-git ssh-sync push myproject --branch main
-git ssh-sync status myproject
-```
-
 ## 開発者向け
 
 このリポジトリ自体を開発する場合は、依存関係を `uv sync` でインストールします。
