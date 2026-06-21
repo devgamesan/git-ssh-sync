@@ -151,6 +151,29 @@ def test_pull_command_reports_sync_error(monkeypatch) -> None:
     assert "Cannot fast-forward main." in result.output
 
 
+def test_push_command_runs_push_workflow(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(cli, "push_project", lambda project, *, branch=None: calls.append((project, branch)))
+
+    result = runner.invoke(app, ["push", "myproject", "--branch", "main"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", "main")]
+    assert "Project 'myproject' pushed." in result.output
+
+
+def test_push_command_reports_sync_error(monkeypatch) -> None:
+    def fail(project: str, *, branch: str | None = None) -> None:
+        raise SyncError("Cannot push main.")
+
+    monkeypatch.setattr(cli, "push_project", fail)
+
+    result = runner.invoke(app, ["push", "myproject"])
+
+    assert result.exit_code == 1
+    assert "Cannot push main." in result.output
+
+
 def test_checkout_command_runs_checkout_workflow(monkeypatch) -> None:
     calls = []
     monkeypatch.setattr(cli, "checkout_project", lambda project, branch: calls.append((project, branch)))

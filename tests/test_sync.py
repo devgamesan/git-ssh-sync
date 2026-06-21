@@ -5,6 +5,7 @@ import pytest
 from git_ssh_sync import sync
 from git_ssh_sync.config import AppConfig, DevConfig, LocalConfig, OptionsConfig, ProjectConfig
 from git_ssh_sync.git import CommandResult
+from git_ssh_sync.errors import CommandExecutionError
 
 
 def _project_config(local_path: Path) -> ProjectConfig:
@@ -206,3 +207,113 @@ def test_pull_project_reports_missing_gateway_repo(monkeypatch: pytest.MonkeyPat
 
     with pytest.raises(sync.SyncError, match="gateway repository does not exist"):
         sync.pull_project("myproject", branch="main")
+
+
+def test_push_project_pushes_dev_branch_when_origin_is_ancestor(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+    calls: list[tuple[str, object]] = []
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+
+    def fake_fetch(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
+        calls.append(("fetch", remote, tuple(refspecs), cwd))
+        return _result(("git", "fetch"))
+
+    def fake_run_git(args, *, cwd=None, check=True, **kwargs):
+        calls.append(("run-git", tuple(args), cwd, check))
+        return _result(("git", *args))
+
+    def fake_push(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
+        calls.append(("push", remote, tuple(refspecs), cwd))
+        return _result(("git", "push"))
+
+    monkeypatch.setattr(sync.git, "fetch", fake_fetch)
+    monkeypatch.setattr(sync.git, "run_git", fake_run_git)
+    monkeypatch.setattr(sync.git, "push", fake_push)
+
+    sync.push_project("myproject", branch="main")
+
+    work_url = "ssh://user@devserver/home/user/work/myproject"
+    assert calls == [
+        ("fetch", "origin", (), local_path),
+        ("run-git", ("show-ref", "--verify", "--quiet", "refs/remotes/origin/main"), local_path, False),
+        ("fetch", work_url, ("refs/heads/main:refs/remotes/dev/main",), local_path),
+        (
+            "run-git",
+            ("merge-base", "--is-ancestor", "refs/remotes/origin/main", "refs/remotes/dev/main"),
+            local_path,
+            False,
+        ),
+        ("push", "origin", ("refs/remotes/dev/main:refs/heads/main",), local_path),
+    ]
+
+
+def test_push_project_stops_when_origin_and_dev_diverged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+    monkeypatch.setattr(sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
+
+    def fake_run_git(args, *, cwd=None, check=True, **kwargs):
+        if tuple(args) == (
+            "merge-base",
+            "--is-ancestor",
+            "refs/remotes/origin/main",
+            "refs/remotes/dev/main",
+        ):
+            return _result(("git", *args), returncode=1)
+        return _result(("git", *args))
+
+    def fake_run_remote_git(host: str, repo_path: str, args, *, user=None, check=True, **kwargs):
+        outputs = {
+            ("branch", "--show-current"): "main\n",
+            ("rev-parse", "--short", "HEAD"): "abc1234\n",
+        }
+        return _result(("ssh", host), outputs.get(tuple(args), ""))
+
+    monkeypatch.setattr(sync.git, "run_git", fake_run_git)
+    monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
+
+    with pytest.raises(sync.SyncError) as exc_info:
+        sync.push_project("myproject")
+
+    message = str(exc_info.value)
+    assert "Cannot push main." in message
+    assert "origin/main has commits that are not included in dev/main." in message
+    assert "git-ssh-sync pull myproject --branch main" in message
+    assert "branch: main" in message
+    assert "commit: abc1234" in message
+
+
+def test_push_project_reports_origin_push_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+    monkeypatch.setattr(sync.git, "fetch", lambda *args, **kwargs: _result(("git", "fetch")))
+    monkeypatch.setattr(sync.git, "run_git", lambda *args, **kwargs: _result(("git", "merge-base")))
+
+    def fail_push(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
+        raise CommandExecutionError(
+            environment="local",
+            command=("git", "push", remote, *refspecs),
+            returncode=1,
+            cwd=cwd,
+            stderr="remote rejected\n",
+        )
+
+    monkeypatch.setattr(sync.git, "push", fail_push)
+
+    with pytest.raises(sync.SyncError) as exc_info:
+        sync.push_project("myproject", branch="main")
+
+    message = str(exc_info.value)
+    assert "Failed to push main to origin." in message
+    assert "Origin push failed:" in message
+    assert "remote rejected" in message

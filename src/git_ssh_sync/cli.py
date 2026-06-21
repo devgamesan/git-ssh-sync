@@ -16,7 +16,7 @@ from git_ssh_sync.config import (
 from git_ssh_sync.console import console
 from git_ssh_sync.errors import CommandExecutionError
 from git_ssh_sync.status import StatusError, status_project
-from git_ssh_sync.sync import SyncError, checkout_project, pull_project
+from git_ssh_sync.sync import SyncError, checkout_project, pull_project, push_project
 
 app = typer.Typer(
     name="git-ssh-sync",
@@ -157,8 +157,13 @@ def push_command(
     ] = None,
 ) -> None:
     """Push development commits to origin when it is safe to do so."""
-    _ = branch
-    _not_implemented("push", project)
+    try:
+        push_project(project, branch=branch)
+    except (ConfigError, SyncError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+    console.print(f"Project '{project}' pushed.")
 
 
 @app.command("checkout")
