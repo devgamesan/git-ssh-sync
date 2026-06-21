@@ -33,7 +33,7 @@ def _ensure_gateway_repo(path: Path) -> None:
 
 
 def _ensure_origin_branch(local_path: Path, branch: str) -> None:
-    result = git.rev_parse(["--verify", f"refs/remotes/origin/{branch}"], cwd=local_path, check=False)
+    result = git.run_git(["show-ref", "--verify", "--quiet", f"refs/remotes/origin/{branch}"], cwd=local_path, check=False)
     if result.returncode == 0:
         return
     if result.returncode == 1:
@@ -74,7 +74,7 @@ def _remote_branch_exists(project_config: ProjectConfig, branch: str) -> bool:
     result = ssh.run_remote_git(
         project_config.dev.host,
         project_config.dev.work_path,
-        ["rev-parse", "--verify", f"refs/heads/{branch}"],
+        ["show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
         user=project_config.dev.user,
         check=False,
     )
