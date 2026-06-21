@@ -124,8 +124,8 @@ git commit -m "message"
 GitHub / GitLabとの通信は手元マシンのみが担当する。
 
 ```bash
-git-ssh-sync pull myproject
-git-ssh-sync push myproject
+git-ssh-sync pull myproject --branch main
+git-ssh-sync push myproject --branch main
 ```
 
 ---
@@ -383,7 +383,7 @@ State:
   origin is ahead of dev by 0 commits
 
 Recommendation:
-  git-ssh-sync push myproject
+  git-ssh-sync push myproject --branch main
 ```
 
 ### チェック項目
@@ -406,12 +406,6 @@ Recommendation:
 GitHub / GitLabの最新状態を開発環境へ反映する。
 
 ### 使用例
-
-```bash
-git-ssh-sync pull myproject
-```
-
-branch指定：
 
 ```bash
 git-ssh-sync pull myproject --branch main
@@ -473,12 +467,6 @@ or:
 ### 使用例
 
 ```bash
-git-ssh-sync push myproject
-```
-
-branch指定：
-
-```bash
 git-ssh-sync push myproject --branch main
 ```
 
@@ -524,7 +512,7 @@ origin/main has commits that are not included in dev/main.
 
 Run:
 
-  git-ssh-sync pull myproject
+  git-ssh-sync pull myproject --branch main
 
 Then resolve merge or rebase on the development environment.
 ```
@@ -1020,7 +1008,7 @@ Done.
 詳細表示：
 
 ```bash
-git-ssh-sync pull myproject --verbose
+git-ssh-sync pull myproject --branch main --verbose
 ```
 
 詳細表示時は実行コマンドも表示する。
@@ -1062,7 +1050,7 @@ git-ssh-sync doctor myproject
 手元マシン：
 
 ```bash
-git-ssh-sync pull myproject
+git-ssh-sync pull myproject --branch main
 ```
 
 開発環境：
@@ -1077,7 +1065,7 @@ git commit -m "Add feature"
 手元マシン：
 
 ```bash
-git-ssh-sync push myproject
+git-ssh-sync push myproject --branch main
 ```
 
 ---

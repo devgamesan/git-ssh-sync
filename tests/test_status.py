@@ -161,3 +161,26 @@ def test_print_status_outputs_required_sections(capsys: pytest.CaptureFixture[st
     assert "Commit or stash changes" in output
     assert "Git LFS" in output
     assert "Git submodules" in output
+
+
+def test_recommendation_includes_required_branch_option(capsys: pytest.CaptureFixture[str]) -> None:
+    report = StatusReport(
+        project="myproject",
+        origin_url="git@github.com:example/myproject.git",
+        branch="main",
+        origin_head="a1b2c3d Update README",
+        dev_host="devserver",
+        dev_work_path="/home/user/work/myproject",
+        dev_branch="main",
+        dev_head="d4e5f6a Add feature",
+        dev_working_tree_clean=True,
+        origin_ahead=0,
+        dev_ahead=2,
+        uses_lfs=False,
+        uses_submodules=False,
+    )
+
+    status.print_status(report)
+
+    output = capsys.readouterr().out
+    assert "git-ssh-sync push myproject --branch main" in output

@@ -136,13 +136,22 @@ def test_pull_project_stops_when_branch_diverged(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
 
     with pytest.raises(sync.SyncError) as exc_info:
-        sync.pull_project("myproject")
+        sync.pull_project("myproject", branch="main")
 
     message = str(exc_info.value)
     assert "Cannot fast-forward main." in message
     assert "origin/main and dev/main have diverged." in message
     assert "git merge gitsync/main" in message
     assert "git rebase gitsync/main" in message
+
+
+def test_pull_project_requires_branch() -> None:
+    with pytest.raises(sync.SyncError) as exc_info:
+        sync.pull_project("myproject")
+
+    message = str(exc_info.value)
+    assert "`git-ssh-sync pull` requires --branch <branch>." in message
+    assert "git-ssh-sync pull myproject --branch main" in message
 
 
 def test_checkout_project_switches_new_branch_from_gitsync(
@@ -281,7 +290,7 @@ def test_push_project_stops_when_origin_and_dev_diverged(
     monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
 
     with pytest.raises(sync.SyncError) as exc_info:
-        sync.push_project("myproject")
+        sync.push_project("myproject", branch="main")
 
     message = str(exc_info.value)
     assert "Cannot push main." in message
@@ -289,6 +298,15 @@ def test_push_project_stops_when_origin_and_dev_diverged(
     assert "git-ssh-sync pull myproject --branch main" in message
     assert "branch: main" in message
     assert "commit: abc1234" in message
+
+
+def test_push_project_requires_branch() -> None:
+    with pytest.raises(sync.SyncError) as exc_info:
+        sync.push_project("myproject")
+
+    message = str(exc_info.value)
+    assert "`git-ssh-sync push` requires --branch <branch>." in message
+    assert "git-ssh-sync push myproject --branch main" in message
 
 
 def test_push_project_reports_origin_push_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

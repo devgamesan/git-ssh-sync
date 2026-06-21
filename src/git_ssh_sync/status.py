@@ -147,11 +147,11 @@ def _recommendation(report: StatusReport) -> str:
     if not report.dev_working_tree_clean:
         return "Commit or stash changes on the development environment."
     if report.origin_ahead and report.dev_ahead:
-        return f"git-ssh-sync pull {report.project}, then resolve divergence on the development environment."
+        return f"git-ssh-sync pull {report.project} --branch {report.branch}, then resolve divergence on the development environment."
     if report.origin_ahead:
-        return f"git-ssh-sync pull {report.project}"
+        return f"git-ssh-sync pull {report.project} --branch {report.branch}"
     if report.dev_ahead:
-        return f"git-ssh-sync push {report.project}"
+        return f"git-ssh-sync push {report.project} --branch {report.branch}"
     return "No action needed."
 
 
