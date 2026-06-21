@@ -1,6 +1,6 @@
 """Command line interface for git-ssh-sync."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
 from rich.markup import escape
@@ -118,6 +118,7 @@ def config_list_command() -> None:
         console.print(f"  origin: {escape(project_config.origin)}")
         console.print(f"  local repo: {escape(project_config.local.repo_path)}")
         console.print(f"  dev host: {escape(project_config.dev.host)}")
+        console.print(f"  dev os: {escape(project_config.dev.os)}")
         console.print(f"  dev path: {escape(project_config.dev.work_path)}")
 
 
@@ -141,6 +142,7 @@ def config_show_command(
     table.add_row("local", "repo_path", escape(project_config.local.repo_path))
     table.add_row("dev", "host", escape(project_config.dev.host))
     table.add_row("dev", "user", escape(project_config.dev.user))
+    table.add_row("dev", "os", escape(project_config.dev.os))
     table.add_row("dev", "work_path", escape(project_config.dev.work_path))
     table.add_row("dev", "cache_path", escape(project_config.dev.cache_path))
     table.add_row("options", "sync_tags", str(project_config.options.sync_tags))
@@ -191,6 +193,10 @@ def config_set_command(
         str | None,
         typer.Option("--dev-user", help="Development environment SSH user."),
     ] = None,
+    dev_os: Annotated[
+        Literal["posix", "windows"] | None,
+        typer.Option("--dev-os", help="Development environment OS: posix or windows."),
+    ] = None,
     dev_path: Annotated[
         str | None,
         typer.Option(
@@ -229,6 +235,7 @@ def config_set_command(
             local_repo_path=local_repo_path,
             dev_host=dev_host,
             dev_user=dev_user,
+            dev_os=dev_os,
             dev_work_path=dev_path,
             dev_cache_path=dev_cache_path,
             sync_tags=sync_tags,
@@ -260,6 +267,10 @@ def init_command(
         str | None,
         typer.Option("--dev-user", help="Development environment SSH user."),
     ] = None,
+    dev_os: Annotated[
+        Literal["posix", "windows"],
+        typer.Option("--dev-os", help="Development environment OS: posix or windows."),
+    ] = "posix",
     dev_path: Annotated[
         str | None,
         typer.Option(
@@ -278,6 +289,7 @@ def init_command(
             origin=origin,
             dev_host=dev_host,
             dev_user=dev_user,
+            dev_os=dev_os,
             dev_work_path=dev_path,
             force=force,
         )

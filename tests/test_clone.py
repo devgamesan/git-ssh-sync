@@ -50,14 +50,28 @@ def test_clone_project_runs_initial_layout_commands(
         )
 
     def fake_run_ssh(host, command, **kwargs):
-        calls.append(("ssh", (host, tuple(command), kwargs)))
+        relevant_kwargs = {
+            key: value
+            for key, value in kwargs.items()
+            if value is not None
+            and not (key == "verbose" and value is False)
+            and not (key == "check" and value is True)
+        }
+        calls.append(("ssh", (host, tuple(command), relevant_kwargs)))
         returncode = 1 if command[:2] == ["test", "-e"] else 0
         return CommandResult(
             f"ssh:{kwargs['user']}@{host}", ("ssh", host, *command), returncode, "", ""
         )
 
     def fake_run_remote_git(host, repo_path, args, **kwargs):
-        calls.append(("remote_git", (host, str(repo_path), tuple(args), kwargs)))
+        relevant_kwargs = {
+            key: value
+            for key, value in kwargs.items()
+            if not (key == "remote_os" and value == "posix")
+        }
+        calls.append(
+            ("remote_git", (host, str(repo_path), tuple(args), relevant_kwargs))
+        )
         return CommandResult(
             f"ssh:{kwargs['user']}@{host}", ("ssh", host, "git", *args), 0, "", ""
         )

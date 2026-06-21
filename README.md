@@ -79,7 +79,20 @@ Key parameters:
 - `--origin`: Repository URL on the GitHub / GitLab side
 - `--dev-host`: SSH host of the development environment
 - `--dev-user`: SSH user of the development environment
+- `--dev-os`: Development environment OS, either `posix` or `windows` (default: `posix`)
 - `--dev-path`: Path to the work repository on the development environment
+
+For a Windows development environment, specify `--dev-os windows` and use Windows
+paths. Windows SSH commands are executed through PowerShell.
+
+```powershell
+git-ssh-sync init myproject `
+  --origin git@github.com:example/myproject.git `
+  --dev-host devserver `
+  --dev-user user `
+  --dev-os windows `
+  --dev-path C:\Users\user\work\myproject
+```
 
 For `--origin`, specify a remote URL that can be used with `git clone` or `git fetch`. Main formats are:
 
@@ -117,6 +130,7 @@ git-ssh-sync config show myproject
 git-ssh-sync config set myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
+  --dev-os posix \
   --dev-path /home/user/work/myproject
 
 # Remove a project after confirmation

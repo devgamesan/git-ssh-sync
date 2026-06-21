@@ -6,7 +6,6 @@ import pytest
 from rich.console import Console
 
 from git_ssh_sync import git
-from git_ssh_sync.console import console
 from git_ssh_sync.errors import CommandExecutionError
 
 
@@ -100,10 +99,9 @@ def test_run_git_can_return_nonzero_result_without_check(
     assert result.stderr == "no match\n"
 
 
-def test_verbose_prints_command(
-    monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_verbose_prints_command(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that verbose=True prints command via console.print()."""
+
     def fake_run(command, **kwargs):
         return CompletedProcess(command, 0, stdout="", stderr="")
 

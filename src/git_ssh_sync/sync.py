@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import quote
 
 from git_ssh_sync import git, ssh
 from git_ssh_sync.config import ProjectConfig, get_project, load_config
@@ -16,14 +15,21 @@ class SyncError(RuntimeError):
     """Raised when a sync workflow stops for a recoverable safety reason."""
 
 
-def _cache_url(*, host: str, user: str, cache_path: str) -> str:
-    quoted_path = quote(cache_path, safe="/~")
-    return f"ssh://{user}@{host}{quoted_path}"
+def _cache_url(
+    *, host: str, user: str, cache_path: str, remote_os: ssh.RemoteOS
+) -> str:
+    return ssh.remote_git_url(
+        host=host, user=user, repo_path=cache_path, remote_os=remote_os
+    )
 
 
 def _work_url(project_config: ProjectConfig) -> str:
-    quoted_path = quote(project_config.dev.work_path, safe="/~")
-    return f"ssh://{project_config.dev.user}@{project_config.dev.host}{quoted_path}"
+    return ssh.remote_git_url(
+        host=project_config.dev.host,
+        user=project_config.dev.user,
+        repo_path=project_config.dev.work_path,
+        remote_os=project_config.dev.os,
+    )
 
 
 def _clean_output(value: str) -> str:
@@ -91,6 +97,7 @@ def _push_origin_branch_to_cache(
         host=project_config.dev.host,
         user=project_config.dev.user,
         cache_path=project_config.dev.cache_path,
+        remote_os=project_config.dev.os,
     )
     git.push(
         remote_cache,
@@ -105,6 +112,7 @@ def _fetch_dev_branch(project_config: ProjectConfig, branch: str) -> None:
         project_config.dev.work_path,
         ["fetch", "gitsync", f"refs/heads/{branch}:refs/remotes/gitsync/{branch}"],
         user=project_config.dev.user,
+        remote_os=project_config.dev.os,
     )
 
 
@@ -115,6 +123,7 @@ def _remote_branch_exists(project_config: ProjectConfig, branch: str) -> bool:
         ["show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
         user=project_config.dev.user,
         check=False,
+        remote_os=project_config.dev.os,
     )
     if result.returncode == 0:
         return True
@@ -136,6 +145,7 @@ def _remote_current_branch(project_config: ProjectConfig) -> str:
         project_config.dev.work_path,
         ["branch", "--show-current"],
         user=project_config.dev.user,
+        remote_os=project_config.dev.os,
     )
     return _clean_output(result.stdout) or "(detached)"
 
@@ -146,6 +156,7 @@ def _remote_gitsync_url(project_config: ProjectConfig) -> str:
         project_config.dev.work_path,
         ["remote", "get-url", "gitsync"],
         user=project_config.dev.user,
+        remote_os=project_config.dev.os,
     )
     return _clean_output(result.stdout)
 
@@ -185,6 +196,7 @@ def _remote_short_head(project_config: ProjectConfig) -> str:
         project_config.dev.work_path,
         ["rev-parse", "--short", "HEAD"],
         user=project_config.dev.user,
+        remote_os=project_config.dev.os,
     )
     return _clean_output(result.stdout)
 
@@ -195,6 +207,7 @@ def _remote_status(project_config: ProjectConfig) -> str:
         project_config.dev.work_path,
         ["status", "--porcelain"],
         user=project_config.dev.user,
+        remote_os=project_config.dev.os,
     )
     return _clean_output(result.stdout)
 
@@ -234,6 +247,7 @@ def _switch_to_branch(project_config: ProjectConfig, branch: str) -> None:
             project_config.dev.work_path,
             ["switch", branch],
             user=project_config.dev.user,
+            remote_os=project_config.dev.os,
         )
         return
 
@@ -242,6 +256,7 @@ def _switch_to_branch(project_config: ProjectConfig, branch: str) -> None:
         project_config.dev.work_path,
         ["switch", "--track", "-c", branch, f"gitsync/{branch}"],
         user=project_config.dev.user,
+        remote_os=project_config.dev.os,
     )
 
 
@@ -259,6 +274,7 @@ def _ensure_fast_forwardable(
         ],
         user=project_config.dev.user,
         check=False,
+        remote_os=project_config.dev.os,
     )
     if result.returncode == 0:
         return
@@ -360,6 +376,7 @@ def pull_project(project: str) -> None:
         project_config.dev.work_path,
         ["merge", "--ff-only", f"gitsync/{selected_branch}"],
         user=project_config.dev.user,
+        remote_os=project_config.dev.os,
     )
 
     logger.info(f"Successfully pulled project '{project}'")

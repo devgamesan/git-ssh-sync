@@ -71,6 +71,7 @@ def _remote_cache_branches(project_config: ProjectConfig) -> set[str]:
         project_config.dev.cache_path,
         ["for-each-ref", "--format=%(refname)", "refs/heads"],
         user=project_config.dev.user,
+        remote_os=project_config.dev.os,
     )
     return _branch_names_from_refs(result.stdout, "refs/heads/")
 
@@ -81,6 +82,7 @@ def _remote_work_branches(project_config: ProjectConfig) -> set[str]:
         project_config.dev.work_path,
         ["for-each-ref", "--format=%(refname)", "refs/heads"],
         user=project_config.dev.user,
+        remote_os=project_config.dev.os,
     )
     return _branch_names_from_refs(result.stdout, "refs/heads/")
 
@@ -91,6 +93,7 @@ def _remote_current_branch(project_config: ProjectConfig) -> str:
         project_config.dev.work_path,
         ["branch", "--show-current"],
         user=project_config.dev.user,
+        remote_os=project_config.dev.os,
     )
     branch = _clean_output(result.stdout)
     if not branch:
@@ -136,6 +139,7 @@ def inspect_project_branch(project: str, project_config: ProjectConfig) -> Branc
         host=project_config.dev.host,
         user=project_config.dev.user,
         repo_path=project_config.dev.work_path,
+        remote_os=project_config.dev.os,
     )
     for branch in sorted(origin_branches & work_branches):
         git.fetch(
@@ -161,7 +165,9 @@ def inspect_project_branch(project: str, project_config: ProjectConfig) -> Branc
                 work_ahead=work_ahead,
             )
         )
-    return BranchReport(project=project, current_branch=current_branch, rows=tuple(rows))
+    return BranchReport(
+        project=project, current_branch=current_branch, rows=tuple(rows)
+    )
 
 
 def _mark(value: bool) -> str:

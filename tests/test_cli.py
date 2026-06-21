@@ -5,7 +5,6 @@ from git_ssh_sync.cli import app
 from git_ssh_sync.clone import CloneError
 from git_ssh_sync.config import default_config_path, get_project, load_config
 from git_ssh_sync.doctor import DoctorError
-from git_ssh_sync.logging_config import setup_logging
 from git_ssh_sync.status import StatusError
 from git_ssh_sync.sync import SyncError
 
@@ -63,8 +62,10 @@ def test_config_list_command_lists_projects(monkeypatch, tmp_path) -> None:
             "devserver",
             "--dev-user",
             "user",
+            "--dev-os",
+            "windows",
             "--dev-path",
-            "/home/user/work/myproject",
+            "C:\\Users\\user\\work\\myproject",
         ],
     )
 
@@ -99,8 +100,10 @@ def test_config_show_command_prints_project_details(monkeypatch, tmp_path) -> No
             "devserver",
             "--dev-user",
             "user",
+            "--dev-os",
+            "windows",
             "--dev-path",
-            "/home/user/work/myproject",
+            "C:\\Users\\user\\work\\myproject",
         ],
     )
 
@@ -199,6 +202,8 @@ def test_config_set_command_updates_project(monkeypatch, tmp_path) -> None:
             "git@github.com:example/second.git",
             "--dev-host",
             "devbox",
+            "--dev-os",
+            "windows",
             "--lfs",
         ],
     )
@@ -207,6 +212,7 @@ def test_config_set_command_updates_project(monkeypatch, tmp_path) -> None:
     project = get_project(load_config(default_config_path()), "myproject")
     assert project.origin == "git@github.com:example/second.git"
     assert project.dev.host == "devbox"
+    assert project.dev.os == "windows"
     assert project.options.lfs is True
 
 
@@ -223,8 +229,10 @@ def test_config_set_command_requires_changes(monkeypatch, tmp_path) -> None:
             "devserver",
             "--dev-user",
             "user",
+            "--dev-os",
+            "windows",
             "--dev-path",
-            "/home/user/work/myproject",
+            "C:\\Users\\user\\work\\myproject",
         ],
     )
 
@@ -248,8 +256,10 @@ def test_init_command_creates_project_config(monkeypatch, tmp_path) -> None:
             "devserver",
             "--dev-user",
             "user",
+            "--dev-os",
+            "windows",
             "--dev-path",
-            "/home/user/work/myproject",
+            "C:\\Users\\user\\work\\myproject",
         ],
     )
 
@@ -261,6 +271,7 @@ def test_init_command_creates_project_config(monkeypatch, tmp_path) -> None:
     assert project.origin == "git@github.com:example/myproject.git"
     assert project.dev.host == "devserver"
     assert project.dev.user == "user"
+    assert project.dev.os == "windows"
 
 
 def test_init_command_requires_force_for_existing_project(
@@ -548,9 +559,7 @@ def test_log_file_option_sets_log_file(monkeypatch) -> None:
 
     monkeypatch.setattr(cli, "setup_logging", mock_setup_logging)
 
-    result = runner.invoke(
-        app, ["--log-file", "/tmp/test.log", "doctor", "myproject"]
-    )
+    result = runner.invoke(app, ["--log-file", "/tmp/test.log", "doctor", "myproject"])
 
     assert result.exit_code != 0  # Will fail due to missing config, but that's OK
     assert len(calls) == 1
