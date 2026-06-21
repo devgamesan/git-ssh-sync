@@ -10,6 +10,7 @@ from pathlib import Path
 
 from git_ssh_sync.console import console
 from git_ssh_sync.errors import CommandExecutionError, format_command
+from git_ssh_sync.logging_config import logger
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,12 @@ def _run_command(
 ) -> CommandResult:
     cwd_path = Path(cwd) if cwd is not None else None
     command_tuple = tuple(str(part) for part in command)
+
+    # Log command execution
+    logger.debug(f"Executing: {format_command(command_tuple)}")
+    logger.debug(f"Working directory: {cwd_path or 'current'}")
+    logger.debug(f"Environment: {environment}")
+
     if verbose:
         console.print(f"$ {format_command(command_tuple)}")
 
@@ -52,6 +59,14 @@ def _run_command(
         text=True,
         check=False,
     )
+
+    # Log command result
+    logger.debug(f"Return code: {completed.returncode}")
+    if completed.stdout:
+        logger.debug(f"Stdout: {completed.stdout.strip()}")
+    if completed.stderr:
+        logger.debug(f"Stderr: {completed.stderr.strip()}")
+
     result = CommandResult(
         environment=environment,
         command=command_tuple,

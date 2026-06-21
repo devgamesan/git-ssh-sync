@@ -9,6 +9,7 @@ from git_ssh_sync import git, ssh
 from git_ssh_sync.config import ProjectConfig, get_project, load_config
 from git_ssh_sync.console import console
 from git_ssh_sync.errors import CommandExecutionError
+from git_ssh_sync.logging_config import logger
 
 
 class SyncError(RuntimeError):
@@ -342,9 +343,12 @@ def pull_project(project: str) -> None:
     _ensure_gateway_repo(local_path)
     _ensure_gitsync_remote_matches(project, project_config)
     selected_branch = _require_remote_current_branch(project_config)
+
+    logger.info(f"Pulling project '{project}' branch '{selected_branch}'")
     console.print(f"Project: {project}")
     console.print(f"Branch: {selected_branch}")
     console.print("Direction: origin -> development")
+
     git.fetch("origin", cwd=local_path)
     _ensure_origin_branch(local_path, selected_branch)
     _push_origin_branch_to_cache(project_config, local_path, selected_branch)
@@ -358,6 +362,8 @@ def pull_project(project: str) -> None:
         user=project_config.dev.user,
     )
 
+    logger.info(f"Successfully pulled project '{project}'")
+
 
 def checkout_project(
     project: str,
@@ -369,6 +375,9 @@ def checkout_project(
     """Switch the development repository to a branch from origin."""
     project_config = _load_project(project)
     local_path = Path(project_config.local.repo_path)
+
+    action = "Creating and checking out" if create else "Checking out"
+    logger.info(f"{action} branch '{branch}' for project '{project}'")
 
     _ensure_gateway_repo(local_path)
     _ensure_gitsync_remote_matches(project, project_config)
@@ -384,6 +393,8 @@ def checkout_project(
     _ensure_dev_clean(project, project_config)
     _switch_to_branch(project_config, branch)
 
+    logger.info(f"Successfully checked out branch '{branch}' for project '{project}'")
+
 
 def push_project(project: str) -> None:
     """Push current development branch commits to origin when it has not diverged."""
@@ -393,9 +404,12 @@ def push_project(project: str) -> None:
     _ensure_gateway_repo(local_path)
     _ensure_gitsync_remote_matches(project, project_config)
     selected_branch = _require_remote_current_branch(project_config)
+
+    logger.info(f"Pushing project '{project}' branch '{selected_branch}'")
     console.print(f"Project: {project}")
     console.print(f"Branch: {selected_branch}")
     console.print("Direction: development -> origin")
+
     git.fetch("origin", cwd=local_path)
     _ensure_origin_branch(local_path, selected_branch)
     _fetch_dev_branch_to_local(project_config, local_path, selected_branch)
@@ -407,7 +421,9 @@ def push_project(project: str) -> None:
             [f"refs/remotes/dev/{selected_branch}:refs/heads/{selected_branch}"],
             cwd=local_path,
         )
+        logger.info(f"Successfully pushed project '{project}'")
     except CommandExecutionError as error:
+        logger.error(f"Failed to push project '{project}': {error}")
         raise SyncError(
             f"Failed to push {selected_branch} to origin.\n\n"
             f"Project:\n  {project}\n\n"

@@ -5,6 +5,7 @@ from git_ssh_sync.cli import app
 from git_ssh_sync.clone import CloneError
 from git_ssh_sync.config import default_config_path, get_project, load_config
 from git_ssh_sync.doctor import DoctorError
+from git_ssh_sync.logging_config import setup_logging
 from git_ssh_sync.status import StatusError
 from git_ssh_sync.sync import SyncError
 
@@ -501,3 +502,72 @@ def test_checkout_command_reports_sync_error(monkeypatch) -> None:
 
     assert result.exit_code == 1
     assert "Development working tree is dirty." in result.output
+
+
+def test_verbose_option_enables_verbose_logging(monkeypatch) -> None:
+    """Test that --verbose option enables INFO level logging."""
+    # Track setup_logging calls
+    calls = []
+
+    def mock_setup_logging(*, level=None, log_file=None):
+        calls.append((level, log_file))
+
+    monkeypatch.setattr(cli, "setup_logging", mock_setup_logging)
+
+    result = runner.invoke(app, ["--verbose", "doctor", "myproject"])
+
+    assert result.exit_code != 0  # Will fail due to missing config, but that's OK
+    assert len(calls) == 1
+    assert calls[0] == ("INFO", None)
+
+
+def test_debug_option_enables_debug_logging(monkeypatch) -> None:
+    """Test that --debug option enables DEBUG level logging."""
+    # Track setup_logging calls
+    calls = []
+
+    def mock_setup_logging(*, level=None, log_file=None):
+        calls.append((level, log_file))
+
+    monkeypatch.setattr(cli, "setup_logging", mock_setup_logging)
+
+    result = runner.invoke(app, ["--debug", "doctor", "myproject"])
+
+    assert result.exit_code != 0  # Will fail due to missing config, but that's OK
+    assert len(calls) == 1
+    assert calls[0] == ("DEBUG", None)
+
+
+def test_log_file_option_sets_log_file(monkeypatch) -> None:
+    """Test that --log-file option sets custom log file path."""
+    # Track setup_logging calls
+    calls = []
+
+    def mock_setup_logging(*, level=None, log_file=None):
+        calls.append((level, log_file))
+
+    monkeypatch.setattr(cli, "setup_logging", mock_setup_logging)
+
+    result = runner.invoke(
+        app, ["--log-file", "/tmp/test.log", "doctor", "myproject"]
+    )
+
+    assert result.exit_code != 0  # Will fail due to missing config, but that's OK
+    assert len(calls) == 1
+    assert calls[0][1] == "/tmp/test.log"
+
+
+def test_verbose_and_debug_options_debug_takes_precedence(monkeypatch) -> None:
+    """Test that when both --verbose and --debug are provided, --debug takes precedence."""
+    calls = []
+
+    def mock_setup_logging(*, level=None, log_file=None):
+        calls.append((level, log_file))
+
+    monkeypatch.setattr(cli, "setup_logging", mock_setup_logging)
+
+    result = runner.invoke(app, ["--verbose", "--debug", "doctor", "myproject"])
+
+    assert result.exit_code != 0  # Will fail due to missing config, but that's OK
+    assert len(calls) == 1
+    assert calls[0] == ("DEBUG", None)

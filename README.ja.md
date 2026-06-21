@@ -288,6 +288,55 @@ git-ssh-sync checkout myproject -b feature/foo --base develop
 git-ssh-sync doctor myproject
 ```
 
+## ログ出力
+
+`git-ssh-sync` は、トラブルシューティングと同期操作の監視のための詳細なログ出力をサポートしています。
+
+### ログレベル
+
+デフォルトでは、警告とエラーのみが表示されます。以下のオプションで詳細度を上げることができます：
+
+- `--verbose`, `-v`: INFO レベルのログを有効化（操作進捗、Git/SSH コマンド）
+- `--debug`, `-d`: DEBUG レベルのログを有効化（全デバッグ情報、コマンド出力、スタックトレース）
+
+### ログファイル出力
+
+ログは自動的に `~/.cache/git-ssh-sync/logs/git-ssh-sync.log` に保存されます。ログファイルは、コンソール出力の設定に関係なく、すべてのログレベル（DEBUG 以上）を含みます。
+
+`--log-file` でカスタムログファイルパスを指定できます：
+
+```bash
+git-ssh-sync pull myproject --log-file /tmp/my-sync.log
+```
+
+### 使用例
+
+```bash
+# デフォルト（警告とエラーのみ）
+git-ssh-sync pull myproject
+
+# 詳細出力（操作進捗）
+git-ssh-sync pull myproject --verbose
+
+# デバッグ出力（コマンド実行などの全詳細）
+git-ssh-sync pull myproject --debug
+
+# カスタムログファイル付き詳細出力
+git-ssh-sync push myproject --verbose --log-file /tmp/sync.log
+
+# 診断時のデバッグ出力
+git-ssh-sync doctor myproject --debug
+```
+
+### ログ内容
+
+- **INFO**: 操作進捗（pull/push/checkout）、成功メッセージ
+- **DEBUG**: 実行された Git/SSH コマンド、戻り値、標準出力/標準エラー、作業ディレクトリ
+- **WARNING**: 回復可能な問題（LFS、サブモジュール検出）
+- **ERROR**: 失敗、実行エラー
+
+ログは、SSH 接続の問題、Git コマンドの失敗、同期フローの理解などのトラブルシューティング時に特に役立ちます。
+
 ## 開発者向け
 
 このリポジトリ自体を開発する場合は、依存関係を `uv sync` でインストールします。

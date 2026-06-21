@@ -24,6 +24,7 @@ from git_ssh_sync.config import (
 from git_ssh_sync.console import console
 from git_ssh_sync.doctor import DoctorError, doctor_project
 from git_ssh_sync.errors import CommandExecutionError
+from git_ssh_sync.logging_config import setup_logging
 from git_ssh_sync.status import StatusError, status_project
 from git_ssh_sync.sync import SyncError, checkout_project, pull_project, push_project
 
@@ -53,8 +54,40 @@ def callback(
             help="Show the application version and exit.",
         ),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Enable verbose output (INFO level).",
+        ),
+    ] = False,
+    debug: Annotated[
+        bool,
+        typer.Option(
+            "--debug",
+            "-d",
+            help="Enable debug output (DEBUG level).",
+        ),
+    ] = False,
+    log_file: Annotated[
+        str | None,
+        typer.Option(
+            "--log-file",
+            help="Path to log file.",
+        ),
+    ] = None,
 ) -> None:
     """Sync Git commits through a local machine over SSH."""
+    # Setup logging based on verbosity options
+    if debug:
+        level = "DEBUG"
+    elif verbose:
+        level = "INFO"
+    else:
+        level = "WARNING"
+
+    setup_logging(level=level, log_file=log_file)
 
 
 def _not_implemented(command: str, project: str | None = None) -> None:
