@@ -27,7 +27,7 @@ GitHub / GitLab
 - GitHub / GitLab にアクセスできる
 - 開発環境へ SSH 接続できる
 - `git` と `uv` を利用できる
-- `git-ssh-sync` を実行する
+- `git-ssh-sync` コマンドをインストールし、`init` / `clone` / `pull` / `push` / `status` / `doctor` を実行する
 
 開発環境:
 
