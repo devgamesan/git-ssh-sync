@@ -53,6 +53,13 @@ def _not_implemented(command: str, project: str | None = None) -> None:
     )
 
 
+def _require_branch(branch: str | None) -> str:
+    if branch is None:
+        console.print("[red]--branch is required.[/red]")
+        raise typer.Exit(code=2)
+    return branch
+
+
 @app.command("init")
 def init_command(
     project: Annotated[str, typer.Argument(help="Project name to register.")],
@@ -134,11 +141,12 @@ def status_command(
 def pull_command(
     project: Annotated[str, typer.Argument(help="Project name to pull.")],
     branch: Annotated[
-        str,
+        str | None,
         typer.Option("--branch", help="Branch to pull."),
-    ],
+    ] = None,
 ) -> None:
     """Fetch origin changes and fast-forward the development repository."""
+    branch = _require_branch(branch)
     try:
         pull_project(project, branch=branch)
     except (ConfigError, SyncError, CommandExecutionError) as error:
@@ -152,11 +160,12 @@ def pull_command(
 def push_command(
     project: Annotated[str, typer.Argument(help="Project name to push.")],
     branch: Annotated[
-        str,
+        str | None,
         typer.Option("--branch", help="Branch to push."),
-    ],
+    ] = None,
 ) -> None:
     """Push development commits to origin when it is safe to do so."""
+    branch = _require_branch(branch)
     try:
         push_project(project, branch=branch)
     except (ConfigError, SyncError, CommandExecutionError) as error:
