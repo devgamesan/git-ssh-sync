@@ -17,12 +17,30 @@ def test_top_level_help() -> None:
 
     assert result.exit_code == 0
     assert "git-ssh-sync" in result.output
-    for command in ("init", "clone", "status", "pull", "push", "checkout", "doctor"):
+    for command in (
+        "init",
+        "clone",
+        "status",
+        "branch",
+        "pull",
+        "push",
+        "checkout",
+        "doctor",
+    ):
         assert command in result.output
 
 
 def test_subcommand_help() -> None:
-    for command in ("init", "clone", "status", "pull", "push", "checkout", "doctor"):
+    for command in (
+        "init",
+        "clone",
+        "status",
+        "branch",
+        "pull",
+        "push",
+        "checkout",
+        "doctor",
+    ):
         result = runner.invoke(app, [command, "--help"])
 
         assert result.exit_code == 0
@@ -45,8 +63,6 @@ def test_init_command_creates_project_config(monkeypatch, tmp_path) -> None:
             "user",
             "--dev-path",
             "/home/user/work/myproject",
-            "--branch",
-            "main",
         ],
     )
 
@@ -56,7 +72,6 @@ def test_init_command_creates_project_config(monkeypatch, tmp_path) -> None:
     project = get_project(load_config(default_config_path()), "myproject")
 
     assert project.origin == "git@github.com:example/myproject.git"
-    assert project.default_branch == "main"
     assert project.dev.host == "devserver"
     assert project.dev.user == "user"
 
@@ -131,6 +146,16 @@ def test_status_command_reports_status_error(monkeypatch) -> None:
     assert "gateway repository does not exist" in result.output
 
 
+def test_branch_command_runs_branch_workflow(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(cli, "branch_project", lambda project: calls.append(project))
+
+    result = runner.invoke(app, ["branch", "myproject"])
+
+    assert result.exit_code == 0
+    assert calls == ["myproject"]
+
+
 def test_doctor_command_runs_doctor_workflow(monkeypatch) -> None:
     calls = []
     monkeypatch.setattr(cli, "doctor_project", lambda project: calls.append(project))
@@ -155,32 +180,23 @@ def test_doctor_command_reports_doctor_error(monkeypatch) -> None:
 
 def test_pull_command_runs_pull_workflow(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(
-        cli,
-        "pull_project",
-        lambda project, *, branch=None: calls.append((project, branch)),
-    )
-
-    result = runner.invoke(app, ["pull", "myproject", "--branch", "main"])
-
-    assert result.exit_code == 0
-    assert calls == [("myproject", "main")]
-    assert "Project 'myproject' pulled." in result.output
-
-
-def test_pull_command_requires_branch(monkeypatch) -> None:
-    calls = []
-    monkeypatch.setattr(
-        cli,
-        "pull_project",
-        lambda project, *, branch=None: calls.append((project, branch)),
-    )
+    monkeypatch.setattr(cli, "pull_project", lambda project: calls.append(project))
 
     result = runner.invoke(app, ["pull", "myproject"])
 
+    assert result.exit_code == 0
+    assert calls == ["myproject"]
+    assert "Project 'myproject' pulled." in result.output
+
+
+def test_pull_command_rejects_branch_option(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(cli, "pull_project", lambda project: calls.append(project))
+
+    result = runner.invoke(app, ["pull", "myproject", "--branch", "main"])
+
     assert result.exit_code == 2
     assert calls == []
-    assert "--branch" in result.output
 
 
 def test_pull_command_reports_sync_error(monkeypatch) -> None:
@@ -189,7 +205,7 @@ def test_pull_command_reports_sync_error(monkeypatch) -> None:
 
     monkeypatch.setattr(cli, "pull_project", fail)
 
-    result = runner.invoke(app, ["pull", "myproject", "--branch", "main"])
+    result = runner.invoke(app, ["pull", "myproject"])
 
     assert result.exit_code == 1
     assert "Cannot fast-forward main." in result.output
@@ -197,32 +213,23 @@ def test_pull_command_reports_sync_error(monkeypatch) -> None:
 
 def test_push_command_runs_push_workflow(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(
-        cli,
-        "push_project",
-        lambda project, *, branch=None: calls.append((project, branch)),
-    )
-
-    result = runner.invoke(app, ["push", "myproject", "--branch", "main"])
-
-    assert result.exit_code == 0
-    assert calls == [("myproject", "main")]
-    assert "Project 'myproject' pushed." in result.output
-
-
-def test_push_command_requires_branch(monkeypatch) -> None:
-    calls = []
-    monkeypatch.setattr(
-        cli,
-        "push_project",
-        lambda project, *, branch=None: calls.append((project, branch)),
-    )
+    monkeypatch.setattr(cli, "push_project", lambda project: calls.append(project))
 
     result = runner.invoke(app, ["push", "myproject"])
 
+    assert result.exit_code == 0
+    assert calls == ["myproject"]
+    assert "Project 'myproject' pushed." in result.output
+
+
+def test_push_command_rejects_branch_option(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(cli, "push_project", lambda project: calls.append(project))
+
+    result = runner.invoke(app, ["push", "myproject", "--branch", "main"])
+
     assert result.exit_code == 2
     assert calls == []
-    assert "--branch" in result.output
 
 
 def test_push_command_reports_sync_error(monkeypatch) -> None:
@@ -231,7 +238,7 @@ def test_push_command_reports_sync_error(monkeypatch) -> None:
 
     monkeypatch.setattr(cli, "push_project", fail)
 
-    result = runner.invoke(app, ["push", "myproject", "--branch", "main"])
+    result = runner.invoke(app, ["push", "myproject"])
 
     assert result.exit_code == 1
     assert "Cannot push main." in result.output
@@ -242,15 +249,15 @@ def test_checkout_command_runs_checkout_workflow(monkeypatch) -> None:
     monkeypatch.setattr(
         cli,
         "checkout_project",
-        lambda project, branch, *, base_branch=None: calls.append(
-            (project, branch, base_branch)
+        lambda project, branch, *, create=False, base_branch=None: calls.append(
+            (project, branch, create, base_branch)
         ),
     )
 
     result = runner.invoke(app, ["checkout", "myproject", "feature/foo"])
 
     assert result.exit_code == 0
-    assert calls == [("myproject", "feature/foo", None)]
+    assert calls == [("myproject", "feature/foo", False, None)]
     assert "Project 'myproject' checked out feature/foo." in result.output
 
 
@@ -259,8 +266,27 @@ def test_checkout_command_passes_base_branch(monkeypatch) -> None:
     monkeypatch.setattr(
         cli,
         "checkout_project",
-        lambda project, branch, *, base_branch=None: calls.append(
-            (project, branch, base_branch)
+        lambda project, branch, *, create=False, base_branch=None: calls.append(
+            (project, branch, create, base_branch)
+        ),
+    )
+
+    result = runner.invoke(
+        app, ["checkout", "myproject", "-b", "feature/foo", "--base", "develop"]
+    )
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", "feature/foo", True, "develop")]
+    assert "Project 'myproject' checked out feature/foo." in result.output
+
+
+def test_checkout_command_rejects_base_without_create_branch(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "checkout_project",
+        lambda project, branch, *, create=False, base_branch=None: calls.append(
+            (project, branch, create, base_branch)
         ),
     )
 
@@ -268,13 +294,19 @@ def test_checkout_command_passes_base_branch(monkeypatch) -> None:
         app, ["checkout", "myproject", "feature/foo", "--base", "develop"]
     )
 
-    assert result.exit_code == 0
-    assert calls == [("myproject", "feature/foo", "develop")]
-    assert "Project 'myproject' checked out feature/foo." in result.output
+    assert result.exit_code == 2
+    assert calls == []
+    assert "--base" in result.output
 
 
 def test_checkout_command_reports_sync_error(monkeypatch) -> None:
-    def fail(project: str, branch: str, *, base_branch: str | None = None) -> None:
+    def fail(
+        project: str,
+        branch: str,
+        *,
+        create: bool = False,
+        base_branch: str | None = None,
+    ) -> None:
         raise SyncError("Development working tree is dirty.")
 
     monkeypatch.setattr(cli, "checkout_project", fail)

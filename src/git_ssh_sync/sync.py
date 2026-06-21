@@ -7,6 +7,7 @@ from urllib.parse import quote
 
 from git_ssh_sync import git, ssh
 from git_ssh_sync.config import ProjectConfig, get_project, load_config
+from git_ssh_sync.console import console
 from git_ssh_sync.errors import CommandExecutionError
 
 
@@ -26,16 +27,6 @@ def _work_url(project_config: ProjectConfig) -> str:
 
 def _clean_output(value: str) -> str:
     return value.strip()
-
-
-def _require_branch(project: str, command: str, branch: str | None) -> str:
-    if branch:
-        return branch
-    raise SyncError(
-        f"`git-ssh-sync {command}` requires --branch <branch>.\n\n"
-        "Specify the branch explicitly:\n\n"
-        f"  git-ssh-sync {command} {project} --branch main"
-    )
 
 
 def _ensure_gateway_repo(path: Path) -> None:
@@ -146,6 +137,45 @@ def _remote_current_branch(project_config: ProjectConfig) -> str:
         user=project_config.dev.user,
     )
     return _clean_output(result.stdout) or "(detached)"
+
+
+def _remote_gitsync_url(project_config: ProjectConfig) -> str:
+    result = ssh.run_remote_git(
+        project_config.dev.host,
+        project_config.dev.work_path,
+        ["remote", "get-url", "gitsync"],
+        user=project_config.dev.user,
+    )
+    return _clean_output(result.stdout)
+
+
+def _ensure_gitsync_remote_matches(project: str, project_config: ProjectConfig) -> None:
+    actual_url = _remote_gitsync_url(project_config)
+    expected_url = project_config.dev.cache_path
+    if actual_url == expected_url:
+        return
+    raise SyncError(
+        "Development work repository gitsync remote does not match the configured cache path.\n\n"
+        f"Project:\n  {project}\n\n"
+        "Development:\n"
+        f"  host: {project_config.dev.host}\n"
+        f"  path: {project_config.dev.work_path}\n\n"
+        f"Configured cache path:\n  {expected_url}\n\n"
+        f"Actual gitsync remote:\n  {actual_url}\n\n"
+        "Update the work repo remote or recreate the project clone:\n\n"
+        f"  git -C {project_config.dev.work_path} remote set-url gitsync {expected_url}"
+    )
+
+
+def _require_remote_current_branch(project_config: ProjectConfig) -> str:
+    branch = _remote_current_branch(project_config)
+    if branch == "(detached)":
+        raise SyncError(
+            "Development work repository is in detached HEAD state.\n\n"
+            "Switch to a branch on the development environment or run:\n\n"
+            "  git-ssh-sync checkout <project> <branch>"
+        )
+    return branch
 
 
 def _remote_short_head(project_config: ProjectConfig) -> str:
@@ -287,7 +317,7 @@ def _ensure_pushable(
             f"  branch: {current_branch}\n"
             f"  commit: {current_commit}\n\n"
             "Run:\n\n"
-            f"  git-ssh-sync pull {project} --branch {branch}\n\n"
+            f"  git-ssh-sync pull {project}\n\n"
             "Then resolve the branch on the development environment before pushing again."
         )
     raise CommandExecutionError(
@@ -304,44 +334,50 @@ def _load_project(project: str) -> ProjectConfig:
     return get_project(load_config(), project)
 
 
-def pull_project(project: str, branch: str | None = None) -> None:
-    """Fetch origin changes and fast-forward the development repository."""
-    selected_branch = _require_branch(project, "pull", branch)
+def pull_project(project: str) -> None:
+    """Fetch origin changes and fast-forward the current development branch."""
     project_config = _load_project(project)
     local_path = Path(project_config.local.repo_path)
 
     _ensure_gateway_repo(local_path)
+    _ensure_gitsync_remote_matches(project, project_config)
+    selected_branch = _require_remote_current_branch(project_config)
+    console.print(f"Project: {project}")
+    console.print(f"Branch: {selected_branch}")
+    console.print("Direction: origin -> development")
     git.fetch("origin", cwd=local_path)
     _ensure_origin_branch(local_path, selected_branch)
     _push_origin_branch_to_cache(project_config, local_path, selected_branch)
     _fetch_dev_branch(project_config, selected_branch)
 
-    if _remote_branch_exists(project_config, selected_branch):
-        _ensure_fast_forwardable(project, project_config, selected_branch)
-        _switch_to_branch(project_config, selected_branch)
-        ssh.run_remote_git(
-            project_config.dev.host,
-            project_config.dev.work_path,
-            ["merge", "--ff-only", f"gitsync/{selected_branch}"],
-            user=project_config.dev.user,
-        )
-        return
-
-    _ensure_dev_clean(project, project_config)
-    _switch_to_branch(project_config, selected_branch)
+    _ensure_fast_forwardable(project, project_config, selected_branch)
+    ssh.run_remote_git(
+        project_config.dev.host,
+        project_config.dev.work_path,
+        ["merge", "--ff-only", f"gitsync/{selected_branch}"],
+        user=project_config.dev.user,
+    )
 
 
-def checkout_project(project: str, branch: str, base_branch: str | None = None) -> None:
+def checkout_project(
+    project: str,
+    branch: str,
+    *,
+    create: bool = False,
+    base_branch: str | None = None,
+) -> None:
     """Switch the development repository to a branch from origin."""
     project_config = _load_project(project)
     local_path = Path(project_config.local.repo_path)
 
     _ensure_gateway_repo(local_path)
+    _ensure_gitsync_remote_matches(project, project_config)
     git.fetch("origin", cwd=local_path)
-    if base_branch is not None:
-        _ensure_origin_branch(local_path, base_branch)
+    if create:
+        base = base_branch or _require_remote_current_branch(project_config)
+        _ensure_origin_branch(local_path, base)
         _ensure_origin_branch_missing(project, local_path, branch)
-        _create_origin_branch(local_path, branch, base_branch)
+        _create_origin_branch(local_path, branch, base)
     _ensure_origin_branch(local_path, branch)
     _push_origin_branch_to_cache(project_config, local_path, branch)
     _fetch_dev_branch(project_config, branch)
@@ -349,13 +385,17 @@ def checkout_project(project: str, branch: str, base_branch: str | None = None) 
     _switch_to_branch(project_config, branch)
 
 
-def push_project(project: str, branch: str | None = None) -> None:
-    """Push development commits to origin when the branch has not diverged."""
-    selected_branch = _require_branch(project, "push", branch)
+def push_project(project: str) -> None:
+    """Push current development branch commits to origin when it has not diverged."""
     project_config = _load_project(project)
     local_path = Path(project_config.local.repo_path)
 
     _ensure_gateway_repo(local_path)
+    _ensure_gitsync_remote_matches(project, project_config)
+    selected_branch = _require_remote_current_branch(project_config)
+    console.print(f"Project: {project}")
+    console.print(f"Branch: {selected_branch}")
+    console.print("Direction: development -> origin")
     git.fetch("origin", cwd=local_path)
     _ensure_origin_branch(local_path, selected_branch)
     _fetch_dev_branch_to_local(project_config, local_path, selected_branch)

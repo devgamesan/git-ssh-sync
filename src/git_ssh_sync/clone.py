@@ -44,6 +44,14 @@ def _remote_parent(path: str) -> str:
     return str(Path(path).parent)
 
 
+def _local_current_branch(local_path: Path) -> str:
+    result = git.run_git(["branch", "--show-current"], cwd=local_path)
+    branch = result.stdout.strip()
+    if not branch:
+        raise CloneError("Could not determine the cloned repository's current branch.")
+    return branch
+
+
 def clone_project(project: str) -> None:
     """Clone a configured project and initialize its development repositories."""
     app_config = load_config()
@@ -54,7 +62,6 @@ def clone_project(project: str) -> None:
     dev_user = project_config.dev.user
     cache_path = project_config.dev.cache_path
     work_path = project_config.dev.work_path
-    branch = project_config.default_branch
 
     _ensure_local_missing(local_path)
     _ensure_remote_missing(host=dev_host, user=dev_user, path=cache_path)
@@ -63,6 +70,7 @@ def clone_project(project: str) -> None:
     local_path.parent.mkdir(parents=True, exist_ok=True)
     git.run_git(["clone", project_config.origin, str(local_path)])
     git.fetch("origin", cwd=local_path)
+    branch = _local_current_branch(local_path)
 
     ssh.run_ssh(dev_host, ["mkdir", "-p", _remote_parent(cache_path)], user=dev_user)
     ssh.run_ssh(dev_host, ["git", "init", "--bare", cache_path], user=dev_user)

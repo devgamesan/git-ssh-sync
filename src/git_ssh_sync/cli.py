@@ -6,6 +6,7 @@ import typer
 from rich.markup import escape
 
 from git_ssh_sync import __version__
+from git_ssh_sync.branch import BranchError, branch_project
 from git_ssh_sync.clone import CloneError, clone_project
 from git_ssh_sync.config import (
     ConfigError,
@@ -54,13 +55,6 @@ def _not_implemented(command: str, project: str | None = None) -> None:
     )
 
 
-def _require_branch(branch: str | None) -> str:
-    if branch is None:
-        console.print("[red]--branch is required.[/red]")
-        raise typer.Exit(code=2)
-    return branch
-
-
 @app.command("init")
 def init_command(
     project: Annotated[str, typer.Argument(help="Project name to register.")],
@@ -84,10 +78,6 @@ def init_command(
             "--dev-path", help="Development environment work repository path."
         ),
     ] = None,
-    branch: Annotated[
-        str,
-        typer.Option("--branch", help="Default branch to synchronize."),
-    ] = "main",
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite an existing project configuration."),
@@ -98,7 +88,6 @@ def init_command(
         project_config = init_project(
             project,
             origin=origin,
-            default_branch=branch,
             dev_host=dev_host,
             dev_user=dev_user,
             dev_work_path=dev_path,
@@ -113,7 +102,6 @@ def init_command(
 
     console.print(f"Project '{project}' saved to {default_config_path()}")
     console.print(f"origin: {project_config.origin}")
-    console.print(f"default_branch: {project_config.default_branch}")
 
 
 @app.command("clone")
@@ -142,18 +130,25 @@ def status_command(
         raise typer.Exit(code=1) from error
 
 
+@app.command("branch")
+def branch_command(
+    project: Annotated[str, typer.Argument(help="Project name to inspect.")],
+) -> None:
+    """List branch state across origin, development cache, and work repo."""
+    try:
+        branch_project(project)
+    except (ConfigError, BranchError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+
 @app.command("pull")
 def pull_command(
     project: Annotated[str, typer.Argument(help="Project name to pull.")],
-    branch: Annotated[
-        str | None,
-        typer.Option("--branch", help="Branch to pull."),
-    ] = None,
 ) -> None:
-    """Fetch origin changes and fast-forward the development repository."""
-    branch = _require_branch(branch)
+    """Fetch origin changes and fast-forward the current development branch."""
     try:
-        pull_project(project, branch=branch)
+        pull_project(project)
     except (ConfigError, SyncError, CommandExecutionError) as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(code=1) from error
@@ -164,15 +159,10 @@ def pull_command(
 @app.command("push")
 def push_command(
     project: Annotated[str, typer.Argument(help="Project name to push.")],
-    branch: Annotated[
-        str | None,
-        typer.Option("--branch", help="Branch to push."),
-    ] = None,
 ) -> None:
-    """Push development commits to origin when it is safe to do so."""
-    branch = _require_branch(branch)
+    """Push current development branch commits to origin when it is safe to do so."""
     try:
-        push_project(project, branch=branch)
+        push_project(project)
     except (ConfigError, SyncError, CommandExecutionError) as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(code=1) from error
@@ -184,24 +174,42 @@ def push_command(
 def checkout_command(
     project: Annotated[str, typer.Argument(help="Project name to update.")],
     branch: Annotated[
-        str, typer.Argument(help="Branch to check out in the development repository.")
-    ],
-    base_branch: Annotated[
+        str | None,
+        typer.Argument(help="Branch to check out in the development repository."),
+    ] = None,
+    create_branch: Annotated[
         str | None,
         typer.Option(
-            "--base",
-            help="Create the branch from this origin branch before checking it out.",
+            "-b",
+            "--create-branch",
+            help="Create and check out a new branch.",
         ),
+    ] = None,
+    base_branch: Annotated[
+        str | None,
+        typer.Option("--base", help="Create the branch from this branch."),
     ] = None,
 ) -> None:
     """Switch the development repository to a branch."""
+    target_branch = create_branch or branch
+    if target_branch is None:
+        console.print("[red]Specify a branch or -b <branch>.[/red]")
+        raise typer.Exit(code=2)
+    if base_branch is not None and create_branch is None:
+        console.print("[red]--base can only be used with -b/--create-branch.[/red]")
+        raise typer.Exit(code=2)
     try:
-        checkout_project(project, branch, base_branch=base_branch)
+        checkout_project(
+            project,
+            target_branch,
+            create=create_branch is not None,
+            base_branch=base_branch,
+        )
     except (ConfigError, SyncError, CommandExecutionError) as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(code=1) from error
 
-    console.print(f"Project '{project}' checked out {branch}.")
+    console.print(f"Project '{project}' checked out {target_branch}.")
 
 
 @app.command("doctor")

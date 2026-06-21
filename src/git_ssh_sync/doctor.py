@@ -181,7 +181,7 @@ def _check_origin(local_path: Path, branch: str) -> list[DoctorCheck]:
         checks.append(
             _ok(
                 "Repository",
-                "default branch",
+                "current branch",
                 f"origin/{branch} exists.",
                 environment="local",
             )
@@ -190,10 +190,10 @@ def _check_origin(local_path: Path, branch: str) -> list[DoctorCheck]:
         checks.append(
             _error(
                 "Repository",
-                "default branch",
+                "current branch",
                 f"origin/{branch} does not exist.",
                 environment="local",
-                next_action=f"Create {branch} on origin or update the project's default_branch.",
+                next_action=f"Create {branch} on origin or switch to an existing branch.",
             )
         )
         return checks
@@ -383,10 +383,17 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
     return checks
 
 
-def _check_repository(project_config: ProjectConfig) -> list[DoctorCheck]:
+def _current_local_branch(local_path: Path) -> str:
+    result = git.run_git(["branch", "--show-current"], cwd=local_path)
+    branch = result.stdout.strip()
+    if not branch:
+        raise DoctorError("Gateway repository is in detached HEAD state.")
+    return branch
+
+
+def _check_repository(project_config: ProjectConfig, branch: str) -> list[DoctorCheck]:
     checks: list[DoctorCheck] = []
     local_path = Path(project_config.local.repo_path)
-    branch = project_config.default_branch
 
     if _uses_lfs(local_path):
         checks.append(
@@ -500,7 +507,7 @@ def inspect_project_doctor(project: str, project_config: ProjectConfig) -> Docto
     if not git_available:
         return DoctorReport(
             project=project,
-            branch=project_config.default_branch,
+            branch="unknown",
             origin_url=project_config.origin,
             dev_host=project_config.dev.host,
             dev_work_path=project_config.dev.work_path,
@@ -509,15 +516,17 @@ def inspect_project_doctor(project: str, project_config: ProjectConfig) -> Docto
 
     checks.extend(_check_gateway_repo(local_path))
 
+    branch = "unknown"
     if local_path.exists():
-        checks.extend(_check_origin(local_path, project_config.default_branch))
+        branch = _current_local_branch(local_path)
+        checks.extend(_check_origin(local_path, branch))
         if ssh_available:
             checks.extend(_check_development(project_config))
-            checks.extend(_check_repository(project_config))
+            checks.extend(_check_repository(project_config, branch))
 
     return DoctorReport(
         project=project,
-        branch=project_config.default_branch,
+        branch=branch,
         origin_url=project_config.origin,
         dev_host=project_config.dev.host,
         dev_work_path=project_config.dev.work_path,
@@ -528,7 +537,7 @@ def inspect_project_doctor(project: str, project_config: ProjectConfig) -> Docto
 def print_doctor(report: DoctorReport) -> None:
     """Print a Rich-formatted doctor report."""
     console.print(f"Doctor report for [bold]{escape(report.project)}[/bold]")
-    console.print(f"Default branch: {escape(report.branch)}")
+    console.print(f"Branch: {escape(report.branch)}")
     console.print(f"Origin: {escape(report.origin_url)}")
     console.print(
         f"Development: {escape(report.dev_host)} {escape(report.dev_work_path)}"

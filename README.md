@@ -66,8 +66,7 @@ git-ssh-sync init myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
   --dev-user user \
-  --dev-path /home/user/work/myproject \
-  --branch main
+  --dev-path /home/user/work/myproject
 ```
 
 主な指定内容は次のとおりです。
@@ -77,7 +76,6 @@ git-ssh-sync init myproject \
 - `--dev-host`: 開発環境の SSH ホスト
 - `--dev-user`: 開発環境の SSH ユーザー
 - `--dev-path`: 開発環境上の work repo パス
-- `--branch`: 既定で同期するブランチ
 
 `--origin` には、`git clone` や `git fetch` で指定できるリモート URL を指定します。主な形式は次のとおりです。
 
@@ -99,7 +97,6 @@ git-ssh-sync init myproject \
   --dev-host devserver \
   --dev-user user \
   --dev-path /home/user/work/myproject \
-  --branch main \
   --force
 ```
 
@@ -112,8 +109,7 @@ git-ssh-sync init myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
   --dev-user user \
-  --dev-path /home/user/work/myproject \
-  --branch main
+  --dev-path /home/user/work/myproject
 git-ssh-sync clone myproject
 git-ssh-sync doctor myproject
 ```
@@ -135,7 +131,7 @@ git-ssh-sync doctor myproject
 ローカルマシン:
 
 ```bash
-git-ssh-sync pull myproject --branch main
+git-ssh-sync pull myproject
 ```
 
 開発環境:
@@ -150,15 +146,10 @@ git commit -m "Add feature"
 ローカルマシン:
 
 ```bash
-git-ssh-sync push myproject --branch main
+git-ssh-sync push myproject
 ```
 
-`pull` と `push` は対象ブランチを明示する必要があります。
-
-```bash
-git-ssh-sync pull myproject --branch main
-git-ssh-sync push myproject --branch main
-```
+`pull` と `push` は、開発環境 work repo のカレントブランチを対象にします。別のブランチを同期したい場合は、先に `checkout` で work repo のブランチを切り替えます。
 
 ## ブランチ切り替え workflow
 
@@ -170,10 +161,10 @@ git-ssh-sync push myproject --branch main
 git-ssh-sync checkout myproject feature/foo
 ```
 
-新しいブランチを指定したベースブランチから作る場合は `--base` を付けます。
+新しいブランチを作る場合は `-b` を付けます。起点を明示する場合は `--base` を併用します。
 
 ```bash
-git-ssh-sync checkout myproject feature/foo --base develop
+git-ssh-sync checkout myproject -b feature/foo --base develop
 ```
 
 開発環境:
@@ -188,10 +179,10 @@ git commit -m "Implement foo"
 ローカルマシン:
 
 ```bash
-git-ssh-sync push myproject --branch feature/foo
+git-ssh-sync push myproject
 ```
 
-`checkout --base develop` は、origin の `develop` を元に origin 上へ `feature/foo` を作成し、開発環境の work repo をそのブランチへ切り替えます。すでに origin に同名ブランチがある場合は、`--base` なしで既存ブランチへ切り替えてください。
+`checkout -b feature/foo --base develop` は、origin の `develop` を元に origin 上へ `feature/foo` を作成し、開発環境の work repo をそのブランチへ切り替えます。`--base` を省略した場合は、開発環境 work repo のカレントブランチを起点にします。すでに origin に同名ブランチがある場合は、`-b` なしで既存ブランチへ切り替えてください。
 
 ## 状態確認
 
@@ -201,7 +192,13 @@ git-ssh-sync push myproject --branch feature/foo
 git-ssh-sync status myproject
 ```
 
-`status` は、設定された既定ブランチのみを対象に、origin と開発環境の ahead / behind、開発環境の現在ブランチ、作業ツリー状態を表示します。任意ブランチを指定した状態確認にはまだ対応していません。表示された recommendation に従って、必要に応じて `pull` または `push` を実行してください。
+`status` は、開発環境 work repo のカレントブランチを対象に、origin と開発環境の ahead / behind、作業ツリー状態を表示します。表示された recommendation に従って、必要に応じて `pull` または `push` を実行してください。
+
+ブランチごとの存在状況や ahead / behind を一覧するには `branch` を使います。
+
+```bash
+git-ssh-sync branch myproject
+```
 
 ## 運用ルール
 
@@ -232,8 +229,7 @@ git-ssh-sync init myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
   --dev-user user \
-  --dev-path /home/user/work/myproject \
-  --branch main
+  --dev-path /home/user/work/myproject
 
 # 初回 clone
 git-ssh-sync clone myproject
@@ -241,17 +237,20 @@ git-ssh-sync clone myproject
 # 同期状態を確認
 git-ssh-sync status myproject
 
+# ブランチ状態を確認
+git-ssh-sync branch myproject
+
 # origin の変更を開発環境へ反映
-git-ssh-sync pull myproject --branch main
+git-ssh-sync pull myproject
 
 # 開発環境のコミットを origin へ反映
-git-ssh-sync push myproject --branch main
+git-ssh-sync push myproject
 
 # 開発環境のブランチを切り替え
 git-ssh-sync checkout myproject feature/foo
 
 # ベースブランチから新規ブランチを作成して切り替え
-git-ssh-sync checkout myproject feature/foo --base develop
+git-ssh-sync checkout myproject -b feature/foo --base develop
 
 # 診断
 git-ssh-sync doctor myproject

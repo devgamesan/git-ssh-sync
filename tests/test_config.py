@@ -22,7 +22,6 @@ def test_init_project_saves_defaults_and_expands_local_path(
     project = init_project(
         "myproject",
         origin="git@github.com:example/myproject.git",
-        default_branch="main",
         dev_host="devserver",
         dev_user="user",
         dev_work_path="/home/user/work/myproject",
@@ -38,7 +37,6 @@ def test_init_project_saves_defaults_and_expands_local_path(
     loaded_project = get_project(loaded, "myproject")
 
     assert loaded_project.origin == "git@github.com:example/myproject.git"
-    assert loaded_project.default_branch == "main"
     assert loaded_project.options.sync_tags is True
     assert loaded_project.options.lfs is False
     assert loaded_project.options.submodules is False
@@ -50,7 +48,6 @@ def test_register_project_requires_force_for_existing_project(tmp_path: Path) ->
     first = init_project(
         "myproject",
         origin="git@github.com:example/first.git",
-        default_branch="main",
         dev_host="devserver",
         dev_user="user",
         dev_work_path="/home/user/work/myproject",
@@ -67,7 +64,6 @@ def test_init_project_force_overwrites_existing_project(tmp_path: Path) -> None:
     init_project(
         "myproject",
         origin="git@github.com:example/first.git",
-        default_branch="main",
         dev_host="devserver",
         dev_user="user",
         dev_work_path="/home/user/work/myproject",
@@ -77,7 +73,6 @@ def test_init_project_force_overwrites_existing_project(tmp_path: Path) -> None:
     init_project(
         "myproject",
         origin="git@github.com:example/second.git",
-        default_branch="develop",
         dev_host="devserver",
         dev_user="user",
         dev_work_path="/home/user/work/myproject",
@@ -88,7 +83,6 @@ def test_init_project_force_overwrites_existing_project(tmp_path: Path) -> None:
     project = get_project(load_config(config_path), "myproject")
 
     assert project.origin == "git@github.com:example/second.git"
-    assert project.default_branch == "develop"
 
 
 def test_missing_required_fields_include_project_and_field_names() -> None:
@@ -96,7 +90,6 @@ def test_missing_required_fields_include_project_and_field_names() -> None:
         build_project_config(
             "myproject",
             origin=None,
-            default_branch="main",
             dev_host=None,
             dev_user="user",
             dev_work_path=None,
@@ -117,7 +110,6 @@ version: 1
 projects:
   myproject:
     origin: git@github.com:example/myproject.git
-    default_branch: main
     local: {}
     dev:
       host: devserver

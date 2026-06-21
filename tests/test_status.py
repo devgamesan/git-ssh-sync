@@ -11,7 +11,6 @@ from git_ssh_sync.status import StatusError, StatusReport
 def _project_config(local_path: Path) -> ProjectConfig:
     return ProjectConfig(
         origin="git@github.com:example/myproject.git",
-        default_branch="main",
         local=LocalConfig(repo_path=str(local_path)),
         dev=DevConfig(
             host="devserver",
@@ -213,4 +212,4 @@ def test_recommendation_includes_required_branch_option(
     status.print_status(report)
 
     output = capsys.readouterr().out
-    assert "git-ssh-sync push myproject --branch main" in output
+    assert "git-ssh-sync push myproject" in output

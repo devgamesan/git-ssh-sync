@@ -97,7 +97,6 @@ def inspect_status(project: str) -> StatusReport:
 def inspect_project_status(project: str, project_config: ProjectConfig) -> StatusReport:
     """Inspect a project using an already loaded configuration."""
     local_path = Path(project_config.local.repo_path)
-    branch = project_config.default_branch
     dev_host = project_config.dev.host
     dev_user = project_config.dev.user
     dev_work_path = project_config.dev.work_path
@@ -109,6 +108,15 @@ def inspect_project_status(project: str, project_config: ProjectConfig) -> Statu
     ssh.run_ssh(dev_host, ["true"], user=dev_user)
     _ensure_remote_work_repo(host=dev_host, user=dev_user, path=dev_work_path)
 
+    dev_branch = _clean_output(
+        ssh.run_remote_git(
+            dev_host, dev_work_path, ["branch", "--show-current"], user=dev_user
+        ).stdout
+    )
+    if not dev_branch:
+        raise StatusError("Development work repository is in detached HEAD state.")
+    branch = dev_branch
+
     dev_repo_url = _ssh_repo_url(host=dev_host, user=dev_user, repo_path=dev_work_path)
     git.fetch(
         dev_repo_url, [f"refs/heads/{branch}:refs/remotes/dev/{branch}"], cwd=local_path
@@ -119,11 +127,6 @@ def inspect_project_status(project: str, project_config: ProjectConfig) -> Statu
     origin_head = _clean_output(git.log_oneline(origin_ref, cwd=local_path).stdout)
     dev_head = _clean_output(git.log_oneline(dev_ref, cwd=local_path).stdout)
 
-    dev_branch = _clean_output(
-        ssh.run_remote_git(
-            dev_host, dev_work_path, ["branch", "--show-current"], user=dev_user
-        ).stdout
-    )
     remote_head = _clean_output(
         ssh.run_remote_git(
             dev_host, dev_work_path, ["log", "-1", "--format=%h %s"], user=dev_user
@@ -159,11 +162,11 @@ def _recommendation(report: StatusReport) -> str:
     if not report.dev_working_tree_clean:
         return "Commit or stash changes on the development environment."
     if report.origin_ahead and report.dev_ahead:
-        return f"git-ssh-sync pull {report.project} --branch {report.branch}, then resolve divergence on the development environment."
+        return f"git-ssh-sync pull {report.project}, then resolve divergence on the development environment."
     if report.origin_ahead:
-        return f"git-ssh-sync pull {report.project} --branch {report.branch}"
+        return f"git-ssh-sync pull {report.project}"
     if report.dev_ahead:
-        return f"git-ssh-sync push {report.project} --branch {report.branch}"
+        return f"git-ssh-sync push {report.project}"
     return "No action needed."
 
 

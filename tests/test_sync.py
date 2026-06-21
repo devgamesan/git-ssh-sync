@@ -17,7 +17,6 @@ from git_ssh_sync.errors import CommandExecutionError
 def _project_config(local_path: Path) -> ProjectConfig:
     return ProjectConfig(
         origin="git@github.com:example/myproject.git",
-        default_branch="main",
         local=LocalConfig(repo_path=str(local_path)),
         dev=DevConfig(
             host="devserver",
@@ -45,6 +44,10 @@ def _result(
     )
 
 
+def _gitsync_url_result() -> CommandResult:
+    return _result(("ssh", "devserver"), "/home/user/cache repo/myproject.git\n")
+
+
 def test_pull_project_fast_forwards_existing_branch(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -70,6 +73,10 @@ def test_pull_project_fast_forwards_existing_branch(
         host: str, repo_path: str, args, *, user=None, check=True, **kwargs
     ):
         calls.append(("remote-git", host, repo_path, tuple(args), user, check))
+        if tuple(args) == ("remote", "get-url", "gitsync"):
+            return _result(("ssh", host), "/home/user/cache repo/myproject.git\n")
+        if tuple(args) == ("branch", "--show-current"):
+            return _result(("ssh", host), "main\n")
         return _result(("ssh", host))
 
     monkeypatch.setattr(sync.git, "fetch", fake_fetch)
@@ -77,10 +84,26 @@ def test_pull_project_fast_forwards_existing_branch(
     monkeypatch.setattr(sync.git, "push", fake_push)
     monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
 
-    sync.pull_project("myproject", branch="main")
+    sync.pull_project("myproject")
 
     cache_url = "ssh://user@devserver/home/user/cache%20repo/myproject.git"
     assert calls == [
+        (
+            "remote-git",
+            "devserver",
+            "/home/user/work/myproject",
+            ("remote", "get-url", "gitsync"),
+            "user",
+            True,
+        ),
+        (
+            "remote-git",
+            "devserver",
+            "/home/user/work/myproject",
+            ("branch", "--show-current"),
+            "user",
+            True,
+        ),
         ("fetch", "origin", (), local_path),
         (
             "run-git",
@@ -101,14 +124,6 @@ def test_pull_project_fast_forwards_existing_branch(
             "remote-git",
             "devserver",
             "/home/user/work/myproject",
-            ("show-ref", "--verify", "--quiet", "refs/heads/main"),
-            "user",
-            False,
-        ),
-        (
-            "remote-git",
-            "devserver",
-            "/home/user/work/myproject",
             (
                 "merge-base",
                 "--is-ancestor",
@@ -117,22 +132,6 @@ def test_pull_project_fast_forwards_existing_branch(
             ),
             "user",
             False,
-        ),
-        (
-            "remote-git",
-            "devserver",
-            "/home/user/work/myproject",
-            ("show-ref", "--verify", "--quiet", "refs/heads/main"),
-            "user",
-            False,
-        ),
-        (
-            "remote-git",
-            "devserver",
-            "/home/user/work/myproject",
-            ("switch", "main"),
-            "user",
-            True,
         ),
         (
             "remote-git",
@@ -165,6 +164,7 @@ def test_pull_project_stops_when_branch_diverged(
         host: str, repo_path: str, args, *, user=None, check=True, **kwargs
     ):
         outputs = {
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
             ("branch", "--show-current"): "main\n",
             ("rev-parse", "--short", "HEAD"): "abc1234\n",
         }
@@ -180,7 +180,7 @@ def test_pull_project_stops_when_branch_diverged(
     monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
 
     with pytest.raises(sync.SyncError) as exc_info:
-        sync.pull_project("myproject", branch="main")
+        sync.pull_project("myproject")
 
     message = str(exc_info.value)
     assert "Cannot fast-forward main." in message
@@ -189,13 +189,60 @@ def test_pull_project_stops_when_branch_diverged(
     assert "git rebase gitsync/main" in message
 
 
-def test_pull_project_requires_branch() -> None:
+def test_checkout_project_stops_when_gitsync_remote_does_not_match_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+    local_calls: list[tuple[str, object]] = []
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+
+    def fake_fetch(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
+        local_calls.append(("fetch", remote, tuple(refspecs), cwd))
+        return _result(("git", "fetch"))
+
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
+        if tuple(args) == ("remote", "get-url", "gitsync"):
+            return _result(("ssh", host), "/home/user/cache repo/other.git\n")
+        return _result(("ssh", host))
+
+    monkeypatch.setattr(sync.git, "fetch", fake_fetch)
+    monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
+
+    with pytest.raises(sync.SyncError) as exc_info:
+        sync.checkout_project(
+            "myproject", "feature/foo", create=True, base_branch="develop"
+        )
+
+    message = str(exc_info.value)
+    assert "gitsync remote does not match" in message
+    assert "/home/user/cache repo/myproject.git" in message
+    assert "/home/user/cache repo/other.git" in message
+    assert local_calls == []
+
+
+def test_pull_project_stops_when_development_head_is_detached(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+    monkeypatch.setattr(
+        sync.ssh,
+        "run_remote_git",
+        lambda *args, **kwargs: _gitsync_url_result()
+        if tuple(args[2]) == ("remote", "get-url", "gitsync")
+        else _result(("ssh", "devserver"), ""),
+    )
+
     with pytest.raises(sync.SyncError) as exc_info:
         sync.pull_project("myproject")
 
     message = str(exc_info.value)
-    assert "`git-ssh-sync pull` requires --branch <branch>." in message
-    assert "git-ssh-sync pull myproject --branch main" in message
+    assert "detached HEAD" in message
 
 
 def test_checkout_project_switches_new_branch_from_gitsync(
@@ -220,6 +267,8 @@ def test_checkout_project_switches_new_branch_from_gitsync(
         host: str, repo_path: str, args, *, user=None, check=True, **kwargs
     ):
         calls.append(("remote-git", tuple(args), check))
+        if tuple(args) == ("remote", "get-url", "gitsync"):
+            return _result(("ssh", host), "/home/user/cache repo/myproject.git\n")
         if tuple(args) == ("status", "--porcelain"):
             return _result(("ssh", host), "")
         if tuple(args) == ("show-ref", "--verify", "--quiet", "refs/heads/feature/foo"):
@@ -271,6 +320,8 @@ def test_checkout_project_creates_branch_from_base(
         host: str, repo_path: str, args, *, user=None, check=True, **kwargs
     ):
         remote_calls.append(("remote-git", tuple(args), check))
+        if tuple(args) == ("remote", "get-url", "gitsync"):
+            return _result(("ssh", host), "/home/user/cache repo/myproject.git\n")
         if tuple(args) == ("status", "--porcelain"):
             return _result(("ssh", host), "")
         if tuple(args) == ("show-ref", "--verify", "--quiet", "refs/heads/feature/foo"):
@@ -282,7 +333,7 @@ def test_checkout_project_creates_branch_from_base(
     monkeypatch.setattr(sync.git, "push", fake_push)
     monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
 
-    sync.checkout_project("myproject", "feature/foo", base_branch="develop")
+    sync.checkout_project("myproject", "feature/foo", create=True, base_branch="develop")
 
     cache_url = "ssh://user@devserver/home/user/cache%20repo/myproject.git"
     assert local_calls == [
@@ -325,6 +376,7 @@ def test_checkout_project_creates_branch_from_base(
         ),
     ]
     assert remote_calls == [
+        ("remote-git", ("remote", "get-url", "gitsync"), True),
         (
             "remote-git",
             (
@@ -363,9 +415,16 @@ def test_checkout_project_stops_when_base_branch_is_missing(
         "run_git",
         lambda *args, **kwargs: _result(("git", "show-ref"), returncode=1),
     )
+    monkeypatch.setattr(
+        sync.ssh,
+        "run_remote_git",
+        lambda *args, **kwargs: _gitsync_url_result(),
+    )
 
     with pytest.raises(sync.SyncError) as exc_info:
-        sync.checkout_project("myproject", "feature/foo", base_branch="develop")
+        sync.checkout_project(
+            "myproject", "feature/foo", create=True, base_branch="develop"
+        )
 
     message = str(exc_info.value)
     assert "Origin branch does not exist: develop" in message
@@ -385,9 +444,16 @@ def test_checkout_project_stops_when_target_branch_already_exists(
     monkeypatch.setattr(
         sync.git, "run_git", lambda *args, **kwargs: _result(("git", "show-ref"))
     )
+    monkeypatch.setattr(
+        sync.ssh,
+        "run_remote_git",
+        lambda *args, **kwargs: _gitsync_url_result(),
+    )
 
     with pytest.raises(sync.SyncError) as exc_info:
-        sync.checkout_project("myproject", "feature/foo", base_branch="develop")
+        sync.checkout_project(
+            "myproject", "feature/foo", create=True, base_branch="develop"
+        )
 
     message = str(exc_info.value)
     assert "Origin branch already exists: feature/foo" in message
@@ -414,6 +480,7 @@ def test_checkout_project_stops_when_development_worktree_is_dirty(
         host: str, repo_path: str, args, *, user=None, check=True, **kwargs
     ):
         outputs = {
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
             ("status", "--porcelain"): " M app.py\n",
             ("branch", "--show-current"): "main\n",
             ("rev-parse", "--short", "HEAD"): "abc1234\n",
@@ -438,7 +505,7 @@ def test_pull_project_reports_missing_gateway_repo(
     monkeypatch.setattr(sync, "load_config", lambda: _app_config(tmp_path / "missing"))
 
     with pytest.raises(sync.SyncError, match="gateway repository does not exist"):
-        sync.pull_project("myproject", branch="main")
+        sync.pull_project("myproject")
 
 
 def test_push_project_pushes_dev_branch_when_origin_is_ancestor(
@@ -462,11 +529,21 @@ def test_push_project_pushes_dev_branch_when_origin_is_ancestor(
         calls.append(("push", remote, tuple(refspecs), cwd))
         return _result(("git", "push"))
 
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
+        if tuple(args) == ("remote", "get-url", "gitsync"):
+            return _gitsync_url_result()
+        if tuple(args) == ("branch", "--show-current"):
+            return _result(("ssh", host), "main\n")
+        return _result(("ssh", host))
+
     monkeypatch.setattr(sync.git, "fetch", fake_fetch)
     monkeypatch.setattr(sync.git, "run_git", fake_run_git)
     monkeypatch.setattr(sync.git, "push", fake_push)
+    monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
 
-    sync.push_project("myproject", branch="main")
+    sync.push_project("myproject")
 
     work_url = "ssh://user@devserver/home/user/work/myproject"
     assert calls == [
@@ -518,6 +595,7 @@ def test_push_project_stops_when_origin_and_dev_diverged(
         host: str, repo_path: str, args, *, user=None, check=True, **kwargs
     ):
         outputs = {
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
             ("branch", "--show-current"): "main\n",
             ("rev-parse", "--short", "HEAD"): "abc1234\n",
         }
@@ -527,23 +605,35 @@ def test_push_project_stops_when_origin_and_dev_diverged(
     monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
 
     with pytest.raises(sync.SyncError) as exc_info:
-        sync.push_project("myproject", branch="main")
+        sync.push_project("myproject")
 
     message = str(exc_info.value)
     assert "Cannot push main." in message
     assert "origin/main has commits that are not included in dev/main." in message
-    assert "git-ssh-sync pull myproject --branch main" in message
+    assert "git-ssh-sync pull myproject" in message
     assert "branch: main" in message
     assert "commit: abc1234" in message
 
 
-def test_push_project_requires_branch() -> None:
+def test_push_project_stops_when_development_head_is_detached(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+    monkeypatch.setattr(
+        sync.ssh,
+        "run_remote_git",
+        lambda *args, **kwargs: _gitsync_url_result()
+        if tuple(args[2]) == ("remote", "get-url", "gitsync")
+        else _result(("ssh", "devserver"), ""),
+    )
+
     with pytest.raises(sync.SyncError) as exc_info:
         sync.push_project("myproject")
 
     message = str(exc_info.value)
-    assert "`git-ssh-sync push` requires --branch <branch>." in message
-    assert "git-ssh-sync push myproject --branch main" in message
+    assert "detached HEAD" in message
 
 
 def test_push_project_reports_origin_push_failure(
@@ -559,6 +649,15 @@ def test_push_project_reports_origin_push_failure(
     monkeypatch.setattr(
         sync.git, "run_git", lambda *args, **kwargs: _result(("git", "merge-base"))
     )
+    monkeypatch.setattr(
+        sync.ssh,
+        "run_remote_git",
+        lambda *args, **kwargs: _result(("ssh", "devserver"), "main\n")
+        if tuple(args[2]) == ("branch", "--show-current")
+        else _gitsync_url_result()
+        if tuple(args[2]) == ("remote", "get-url", "gitsync")
+        else _result(("ssh", "devserver")),
+    )
 
     def fail_push(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
         raise CommandExecutionError(
@@ -572,7 +671,7 @@ def test_push_project_reports_origin_push_failure(
     monkeypatch.setattr(sync.git, "push", fail_push)
 
     with pytest.raises(sync.SyncError) as exc_info:
-        sync.push_project("myproject", branch="main")
+        sync.push_project("myproject")
 
     message = str(exc_info.value)
     assert "Failed to push main to origin." in message
