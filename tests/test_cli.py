@@ -5,6 +5,7 @@ from git_ssh_sync.cli import app
 from git_ssh_sync.clone import CloneError
 from git_ssh_sync.config import default_config_path, get_project, load_config
 from git_ssh_sync.status import StatusError
+from git_ssh_sync.sync import SyncError
 
 
 runner = CliRunner()
@@ -125,3 +126,49 @@ def test_status_command_reports_status_error(monkeypatch) -> None:
 
     assert result.exit_code == 1
     assert "gateway repository does not exist" in result.output
+
+
+def test_pull_command_runs_pull_workflow(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(cli, "pull_project", lambda project, *, branch=None: calls.append((project, branch)))
+
+    result = runner.invoke(app, ["pull", "myproject", "--branch", "main"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", "main")]
+    assert "Project 'myproject' pulled." in result.output
+
+
+def test_pull_command_reports_sync_error(monkeypatch) -> None:
+    def fail(project: str, *, branch: str | None = None) -> None:
+        raise SyncError("Cannot fast-forward main.")
+
+    monkeypatch.setattr(cli, "pull_project", fail)
+
+    result = runner.invoke(app, ["pull", "myproject"])
+
+    assert result.exit_code == 1
+    assert "Cannot fast-forward main." in result.output
+
+
+def test_checkout_command_runs_checkout_workflow(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(cli, "checkout_project", lambda project, branch: calls.append((project, branch)))
+
+    result = runner.invoke(app, ["checkout", "myproject", "feature/foo"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", "feature/foo")]
+    assert "Project 'myproject' checked out feature/foo." in result.output
+
+
+def test_checkout_command_reports_sync_error(monkeypatch) -> None:
+    def fail(project: str, branch: str) -> None:
+        raise SyncError("Development working tree is dirty.")
+
+    monkeypatch.setattr(cli, "checkout_project", fail)
+
+    result = runner.invoke(app, ["checkout", "myproject", "feature/foo"])
+
+    assert result.exit_code == 1
+    assert "Development working tree is dirty." in result.output
