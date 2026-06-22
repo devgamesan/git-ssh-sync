@@ -435,18 +435,41 @@ def test_doctor_command_reports_doctor_error(monkeypatch) -> None:
 
 def test_pull_command_runs_pull_workflow(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(cli, "pull_project", lambda project: calls.append(project))
+    monkeypatch.setattr(
+        cli,
+        "pull_project",
+        lambda project, *, dry_run=False: calls.append((project, dry_run)),
+    )
 
     result = runner.invoke(app, ["pull", "myproject"])
 
     assert result.exit_code == 0
-    assert calls == ["myproject"]
+    assert calls == [("myproject", False)]
     assert "Project 'myproject' pulled." in result.output
+
+
+def test_pull_command_passes_dry_run(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "pull_project",
+        lambda project, *, dry_run=False: calls.append((project, dry_run)),
+    )
+
+    result = runner.invoke(app, ["pull", "myproject", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", True)]
+    assert "Project 'myproject' pull dry-run completed." in result.output
 
 
 def test_pull_command_rejects_branch_option(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(cli, "pull_project", lambda project: calls.append(project))
+    monkeypatch.setattr(
+        cli,
+        "pull_project",
+        lambda project, *, dry_run=False: calls.append((project, dry_run)),
+    )
 
     result = runner.invoke(app, ["pull", "myproject", "--branch", "main"])
 
@@ -455,7 +478,7 @@ def test_pull_command_rejects_branch_option(monkeypatch) -> None:
 
 
 def test_pull_command_reports_sync_error(monkeypatch) -> None:
-    def fail(project: str, *, branch: str | None = None) -> None:
+    def fail(project: str, *, dry_run: bool = False) -> None:
         raise SyncError("Cannot fast-forward main.")
 
     monkeypatch.setattr(cli, "pull_project", fail)
@@ -468,18 +491,41 @@ def test_pull_command_reports_sync_error(monkeypatch) -> None:
 
 def test_push_command_runs_push_workflow(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(cli, "push_project", lambda project: calls.append(project))
+    monkeypatch.setattr(
+        cli,
+        "push_project",
+        lambda project, *, dry_run=False: calls.append((project, dry_run)),
+    )
 
     result = runner.invoke(app, ["push", "myproject"])
 
     assert result.exit_code == 0
-    assert calls == ["myproject"]
+    assert calls == [("myproject", False)]
     assert "Project 'myproject' pushed." in result.output
+
+
+def test_push_command_passes_dry_run(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "push_project",
+        lambda project, *, dry_run=False: calls.append((project, dry_run)),
+    )
+
+    result = runner.invoke(app, ["push", "myproject", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", True)]
+    assert "Project 'myproject' push dry-run completed." in result.output
 
 
 def test_push_command_rejects_branch_option(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(cli, "push_project", lambda project: calls.append(project))
+    monkeypatch.setattr(
+        cli,
+        "push_project",
+        lambda project, *, dry_run=False: calls.append((project, dry_run)),
+    )
 
     result = runner.invoke(app, ["push", "myproject", "--branch", "main"])
 
@@ -488,7 +534,7 @@ def test_push_command_rejects_branch_option(monkeypatch) -> None:
 
 
 def test_push_command_reports_sync_error(monkeypatch) -> None:
-    def fail(project: str, *, branch: str | None = None) -> None:
+    def fail(project: str, *, dry_run: bool = False) -> None:
         raise SyncError("Cannot push main.")
 
     monkeypatch.setattr(cli, "push_project", fail)
@@ -504,15 +550,15 @@ def test_checkout_command_runs_checkout_workflow(monkeypatch) -> None:
     monkeypatch.setattr(
         cli,
         "checkout_project",
-        lambda project, branch, *, create=False, base_branch=None: calls.append(
-            (project, branch, create, base_branch)
+        lambda project, branch, *, create=False, base_branch=None, dry_run=False: (
+            calls.append((project, branch, create, base_branch, dry_run))
         ),
     )
 
     result = runner.invoke(app, ["checkout", "myproject", "feature/foo"])
 
     assert result.exit_code == 0
-    assert calls == [("myproject", "feature/foo", False, None)]
+    assert calls == [("myproject", "feature/foo", False, None, False)]
     assert "Project 'myproject' checked out feature/foo." in result.output
 
 
@@ -521,8 +567,8 @@ def test_checkout_command_passes_base_branch(monkeypatch) -> None:
     monkeypatch.setattr(
         cli,
         "checkout_project",
-        lambda project, branch, *, create=False, base_branch=None: calls.append(
-            (project, branch, create, base_branch)
+        lambda project, branch, *, create=False, base_branch=None, dry_run=False: (
+            calls.append((project, branch, create, base_branch, dry_run))
         ),
     )
 
@@ -531,8 +577,28 @@ def test_checkout_command_passes_base_branch(monkeypatch) -> None:
     )
 
     assert result.exit_code == 0
-    assert calls == [("myproject", "feature/foo", True, "develop")]
+    assert calls == [("myproject", "feature/foo", True, "develop", False)]
     assert "Project 'myproject' checked out feature/foo." in result.output
+
+
+def test_checkout_command_passes_dry_run(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "checkout_project",
+        lambda project, branch, *, create=False, base_branch=None, dry_run=False: (
+            calls.append((project, branch, create, base_branch, dry_run))
+        ),
+    )
+
+    result = runner.invoke(app, ["checkout", "myproject", "feature/foo", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", "feature/foo", False, None, True)]
+    assert (
+        "Project 'myproject' checkout dry-run completed for feature/foo."
+        in result.output
+    )
 
 
 def test_checkout_command_rejects_base_without_create_branch(monkeypatch) -> None:
@@ -540,8 +606,8 @@ def test_checkout_command_rejects_base_without_create_branch(monkeypatch) -> Non
     monkeypatch.setattr(
         cli,
         "checkout_project",
-        lambda project, branch, *, create=False, base_branch=None: calls.append(
-            (project, branch, create, base_branch)
+        lambda project, branch, *, create=False, base_branch=None, dry_run=False: (
+            calls.append((project, branch, create, base_branch, dry_run))
         ),
     )
 
@@ -561,6 +627,7 @@ def test_checkout_command_reports_sync_error(monkeypatch) -> None:
         *,
         create: bool = False,
         base_branch: str | None = None,
+        dry_run: bool = False,
     ) -> None:
         raise SyncError("Development working tree is dirty.")
 

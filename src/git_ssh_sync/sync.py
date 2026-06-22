@@ -15,6 +15,26 @@ class SyncError(RuntimeError):
     """Raised when a sync workflow stops for a recoverable safety reason."""
 
 
+def _print_dry_run_plan(
+    *,
+    project: str,
+    branch: str,
+    direction: str,
+    preflight: list[str],
+    operations: list[str],
+) -> None:
+    console.print(f"Project: {project}")
+    console.print(f"Branch: {branch}")
+    console.print(f"Direction: {direction}")
+    console.print("Mode: dry-run")
+    console.print("Preflight:")
+    for item in preflight:
+        console.print(f"  - {item}")
+    console.print("Planned operations:")
+    for item in operations:
+        console.print(f"  - {item}")
+
+
 def _cache_url(
     *, host: str, user: str, cache_path: str, remote_os: ssh.RemoteOS
 ) -> str:
@@ -351,7 +371,7 @@ def _load_project(project: str) -> ProjectConfig:
     return get_project(load_config(), project)
 
 
-def pull_project(project: str) -> None:
+def pull_project(project: str, *, dry_run: bool = False) -> None:
     """Fetch origin changes and fast-forward the current development branch."""
     project_config = _load_project(project)
     local_path = Path(project_config.local.repo_path)
@@ -361,6 +381,32 @@ def pull_project(project: str) -> None:
     selected_branch = _require_remote_current_branch(project_config)
 
     logger.info(f"Pulling project '{project}' branch '{selected_branch}'")
+
+    if dry_run:
+        git.run_git(["fetch", "--dry-run", "origin"], cwd=local_path)
+        _ensure_origin_branch(local_path, selected_branch)
+        _ensure_fast_forwardable(project, project_config, selected_branch)
+        _print_dry_run_plan(
+            project=project,
+            branch=selected_branch,
+            direction="origin -> development",
+            preflight=[
+                "gateway repository exists",
+                "development gitsync remote matches configuration",
+                "development work repo is on a branch",
+                f"origin/{selected_branch} exists in the gateway repository",
+                f"development {selected_branch} can fast-forward to gitsync/{selected_branch}",
+            ],
+            operations=[
+                "fetch origin in the gateway repository",
+                f"push origin/{selected_branch} to the development cache",
+                f"fetch gitsync/{selected_branch} in the development work repo",
+                f"merge --ff-only gitsync/{selected_branch} in the development work repo",
+            ],
+        )
+        logger.info(f"Dry-run pull completed for project '{project}'")
+        return
+
     console.print(f"Project: {project}")
     console.print(f"Branch: {selected_branch}")
     console.print("Direction: origin -> development")
@@ -388,6 +434,7 @@ def checkout_project(
     *,
     create: bool = False,
     base_branch: str | None = None,
+    dry_run: bool = False,
 ) -> None:
     """Switch the development repository to a branch from origin."""
     project_config = _load_project(project)
@@ -398,6 +445,57 @@ def checkout_project(
 
     _ensure_gateway_repo(local_path)
     _ensure_gitsync_remote_matches(project, project_config)
+    if dry_run:
+        git.run_git(["fetch", "--dry-run", "origin"], cwd=local_path)
+        preflight = [
+            "gateway repository exists",
+            "development gitsync remote matches configuration",
+        ]
+        operations = ["fetch origin in the gateway repository"]
+        if create:
+            base = base_branch or _require_remote_current_branch(project_config)
+            _ensure_origin_branch(local_path, base)
+            _ensure_origin_branch_missing(project, local_path, branch)
+            preflight.extend(
+                [
+                    f"origin/{base} exists in the gateway repository",
+                    f"origin/{branch} does not exist in the gateway repository",
+                ]
+            )
+            operations.extend(
+                [
+                    f"create origin/{branch} from origin/{base}",
+                    f"fetch origin/{branch} into the gateway repository",
+                ]
+            )
+        _ensure_origin_branch(local_path, branch)
+        _ensure_dev_clean(project, project_config)
+        branch_exists = _remote_branch_exists(project_config, branch)
+        preflight.extend(
+            [
+                f"origin/{branch} exists in the gateway repository",
+                "development work tree is clean",
+            ]
+        )
+        operations.extend(
+            [
+                f"push origin/{branch} to the development cache",
+                f"fetch gitsync/{branch} in the development work repo",
+                f"switch to existing development branch {branch}"
+                if branch_exists
+                else f"create and track development branch {branch} from gitsync/{branch}",
+            ]
+        )
+        _print_dry_run_plan(
+            project=project,
+            branch=branch,
+            direction="origin -> development checkout",
+            preflight=preflight,
+            operations=operations,
+        )
+        logger.info(f"Dry-run checkout completed for project '{project}'")
+        return
+
     git.fetch("origin", cwd=local_path)
     if create:
         base = base_branch or _require_remote_current_branch(project_config)
@@ -413,7 +511,7 @@ def checkout_project(
     logger.info(f"Successfully checked out branch '{branch}' for project '{project}'")
 
 
-def push_project(project: str) -> None:
+def push_project(project: str, *, dry_run: bool = False) -> None:
     """Push current development branch commits to origin when it has not diverged."""
     project_config = _load_project(project)
     local_path = Path(project_config.local.repo_path)
@@ -423,6 +521,31 @@ def push_project(project: str) -> None:
     selected_branch = _require_remote_current_branch(project_config)
 
     logger.info(f"Pushing project '{project}' branch '{selected_branch}'")
+
+    if dry_run:
+        git.run_git(["fetch", "--dry-run", "origin"], cwd=local_path)
+        _ensure_origin_branch(local_path, selected_branch)
+        _ensure_pushable(project, project_config, local_path, selected_branch)
+        _print_dry_run_plan(
+            project=project,
+            branch=selected_branch,
+            direction="development -> origin",
+            preflight=[
+                "gateway repository exists",
+                "development gitsync remote matches configuration",
+                "development work repo is on a branch",
+                f"origin/{selected_branch} exists in the gateway repository",
+                f"origin/{selected_branch} is an ancestor of dev/{selected_branch}",
+            ],
+            operations=[
+                "fetch origin in the gateway repository",
+                f"fetch development {selected_branch} into the gateway repository",
+                f"push dev/{selected_branch} to origin/{selected_branch}",
+            ],
+        )
+        logger.info(f"Dry-run push completed for project '{project}'")
+        return
+
     console.print(f"Project: {project}")
     console.print(f"Branch: {selected_branch}")
     console.print("Direction: development -> origin")
