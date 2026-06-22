@@ -117,6 +117,57 @@ git-ssh-sync init myproject \
   --force
 ```
 
+### 設定ファイル
+
+プロジェクト設定は YAML として保存されます。保存先は `git-ssh-sync` を実行する
+ローカルマシンの OS によって異なります。
+
+```text
+macOS / Linux: ~/.config/git-ssh-sync/config.yaml
+Windows:       %APPDATA%\git-ssh-sync\config.yaml
+```
+
+生成される設定は次のような形式です。
+
+```yaml
+version: 1
+
+projects:
+  myproject:
+    origin: git@github.com:example/myproject.git
+
+    local:
+      repo_path: ~/.git-ssh-sync/repos/myproject
+
+    dev:
+      host: devserver
+      user: user
+      os: posix
+      work_path: /home/user/work/myproject
+      cache_path: /home/user/.git-ssh-sync/cache/myproject.git
+
+    options:
+      sync_tags: true
+      lfs: false
+      submodules: false
+      ff_only: true
+```
+
+主な項目は次のとおりです。
+
+- `origin`: ローカル側の gateway repo が使う GitHub / GitLab リポジトリ URL
+- `local.repo_path`: `git-ssh-sync` が管理するローカル側 gateway repo のパス
+- `dev.host`, `dev.user`, `dev.os`: SSH 接続先と開発環境の OS
+- `dev.work_path`: 開発環境上の work repo パス
+- `dev.cache_path`: 開発環境上の bare cache repo パス
+- `options.sync_tags`: pull / push 時に Git tag を同期するかどうか
+- `options.lfs`: Git LFS 対応用の予約設定
+- `options.submodules`: submodule 対応用の予約設定
+- `options.ff_only`: fast-forward のみで同期するかどうか
+
+通常は `git-ssh-sync init` と `git-ssh-sync config` コマンドでこのファイルを管理します。
+手動で編集する場合は YAML の構造を変えず、各項目が使われるローカルマシンまたは開発環境で有効なパスを指定してください。
+
 設定ファイルを直接開かなくても、登録済みプロジェクトを確認・整理できます。
 
 ```bash
