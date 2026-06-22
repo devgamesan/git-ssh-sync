@@ -117,6 +117,59 @@ git-ssh-sync init myproject \
   --force
 ```
 
+### Configuration file
+
+Project settings are saved as YAML. The default path depends on the local
+machine where `git-ssh-sync` runs:
+
+```text
+macOS / Linux: ~/.config/git-ssh-sync/config.yaml
+Windows:       %APPDATA%\git-ssh-sync\config.yaml
+```
+
+A generated configuration looks like this:
+
+```yaml
+version: 1
+
+projects:
+  myproject:
+    origin: git@github.com:example/myproject.git
+
+    local:
+      repo_path: ~/.git-ssh-sync/repos/myproject
+
+    dev:
+      host: devserver
+      user: user
+      os: posix
+      work_path: /home/user/work/myproject
+      cache_path: /home/user/.git-ssh-sync/cache/myproject.git
+
+    options:
+      sync_tags: true
+      lfs: false
+      submodules: false
+      ff_only: true
+```
+
+Main fields:
+
+- `origin`: GitHub / GitLab repository URL used by the local gateway repository
+- `local.repo_path`: Local gateway repository path managed by `git-ssh-sync`
+- `dev.host`, `dev.user`, `dev.os`: SSH connection target and remote OS
+- `dev.work_path`: Work repository path on the development environment
+- `dev.cache_path`: Bare cache repository path on the development environment
+- `options.sync_tags`: Synchronize Git tags when pulling or pushing
+- `options.lfs`: Reserved option for Git LFS support
+- `options.submodules`: Reserved option for submodule support
+- `options.ff_only`: Keep synchronization fast-forward only
+
+In normal use, manage this file with `git-ssh-sync init` and
+`git-ssh-sync config` commands. If you edit it manually, keep the YAML
+structure unchanged and use paths that are valid on the machine or
+development environment where each field is used.
+
 You can inspect and maintain registered projects without opening the config file directly.
 
 ```bash
