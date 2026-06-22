@@ -31,6 +31,7 @@ def test_top_level_help() -> None:
         "push",
         "checkout",
         "doctor",
+        "recover",
     ):
         assert command in result.output
 
@@ -48,6 +49,7 @@ def test_subcommand_help() -> None:
         "push",
         "checkout",
         "doctor",
+        "recover",
     ):
         result = runner.invoke(app, [command, "--help"])
 
@@ -499,6 +501,50 @@ def test_doctor_command_reports_doctor_error(monkeypatch) -> None:
     monkeypatch.setattr(cli, "doctor_project", fail)
 
     result = runner.invoke(app, ["doctor", "myproject"])
+
+    assert result.exit_code == 1
+    assert "Doctor found errors." in result.output
+
+
+def test_recover_command_runs_diagnosis_without_repair_by_default(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "doctor_project",
+        lambda project, *, repair=False, yes=False, confirm=None: calls.append(
+            (project, repair, yes, confirm is not None)
+        ),
+    )
+
+    result = runner.invoke(app, ["recover", "myproject"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", False, False, True)]
+
+
+def test_recover_command_repairs_with_yes(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "doctor_project",
+        lambda project, *, repair=False, yes=False, confirm=None: calls.append(
+            (project, repair, yes)
+        ),
+    )
+
+    result = runner.invoke(app, ["recover", "myproject", "--yes"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", True, True)]
+
+
+def test_recover_command_reports_doctor_error(monkeypatch) -> None:
+    def fail(project: str, **kwargs) -> None:
+        raise DoctorError("Doctor found errors.")
+
+    monkeypatch.setattr(cli, "doctor_project", fail)
+
+    result = runner.invoke(app, ["recover", "myproject"])
 
     assert result.exit_code == 1
     assert "Doctor found errors." in result.output

@@ -509,6 +509,31 @@ def doctor_command(
         raise typer.Exit(code=1) from error
 
 
+@app.command("recover")
+def recover_command(
+    project: Annotated[str, typer.Argument(help="Project name to recover.")],
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Apply automatic repair operations without confirmation.",
+        ),
+    ] = False,
+) -> None:
+    """Diagnose sync failures and optionally repair safe repository wiring."""
+    try:
+        doctor_project(
+            project,
+            repair=yes,
+            yes=yes,
+            confirm=lambda message: typer.confirm(message),
+        )
+    except (ConfigError, DoctorError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+
 @dev_app.command("status")
 def dev_status_command(
     project: Annotated[str, typer.Argument(help="Project name to inspect.")],
