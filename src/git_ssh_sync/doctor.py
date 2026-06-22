@@ -260,7 +260,9 @@ def _check_remote_path(
     )
 
 
-def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
+def _check_development(
+    project: str, project_config: ProjectConfig, branch: str
+) -> list[DoctorCheck]:
     checks: list[DoctorCheck] = []
     host = project_config.dev.host
     user = project_config.dev.user
@@ -316,7 +318,7 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
         path=cache_path,
         remote_os=remote_os,
         label="bare cache repo",
-        next_action="Run git-ssh-sync doctor --repair to create the cache repository.",
+        next_action=f"Run git-ssh-sync recover {project} --yes to create the cache repository.",
     )
     checks.append(cache_path_check)
     checks.append(
@@ -358,8 +360,45 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
                     next_action="Move the existing path or configure a bare cache repository path.",
                 )
             )
+        cache_branch = ssh.run_remote_git(
+            host,
+            cache_path,
+            ["show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
+            user=user,
+            check=False,
+            remote_os=remote_os,
+        )
+        if cache_branch.returncode == 0:
+            checks.append(
+                _ok(
+                    "Development",
+                    "cache branch",
+                    f"Cache branch {branch} exists.",
+                    environment=cache_branch.environment,
+                )
+            )
+        elif cache_branch.returncode == 1:
+            checks.append(
+                _error(
+                    "Development",
+                    "cache branch",
+                    f"Cache branch {branch} is missing.",
+                    environment=cache_branch.environment,
+                    next_action=f"Run git-ssh-sync recover {project} --yes to seed the cache branch.",
+                )
+            )
+        else:
+            checks.append(
+                _error(
+                    "Development",
+                    "cache branch",
+                    f"Could not inspect cache branch {branch}: {_command_error_message(_as_command_error(cache_branch))}",
+                    environment=cache_branch.environment,
+                    next_action=f"Inspect the cache repository with git -C {cache_path} show-ref --heads.",
+                )
+            )
 
-    branch = ssh.run_remote_git(
+    branch_result = ssh.run_remote_git(
         host,
         work_path,
         ["branch", "--show-current"],
@@ -367,13 +406,23 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
         check=False,
         remote_os=remote_os,
     )
-    if branch.returncode == 0:
+    if branch_result.returncode == 0 and branch_result.stdout.strip():
         checks.append(
             _ok(
                 "Development",
                 "work repo branch",
-                f"Current branch: {branch.stdout.strip() or '(detached)'}",
-                environment=branch.environment,
+                f"Current branch: {branch_result.stdout.strip()}",
+                environment=branch_result.environment,
+            )
+        )
+    elif branch_result.returncode == 0:
+        checks.append(
+            _error(
+                "Development",
+                "work repo branch",
+                "Development work repository is in detached HEAD state.",
+                environment=branch_result.environment,
+                next_action=f"Run git-ssh-sync checkout {project} <branch> or run git -C {work_path} switch <branch> on the development environment.",
             )
         )
     else:
@@ -381,8 +430,8 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
             _error(
                 "Development",
                 "work repo branch",
-                f"Could not get work repo branch: {_command_error_message(_as_command_error(branch))}",
-                environment=branch.environment,
+                f"Could not get work repo branch: {_command_error_message(_as_command_error(branch_result))}",
+                environment=branch_result.environment,
                 next_action="Inspect the development work repository with git status.",
             )
         )
@@ -420,7 +469,7 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
                 "working tree",
                 f"Development working tree is dirty at {head_value}.",
                 environment=status.environment,
-                next_action="Commit or stash changes on the development environment.",
+                next_action=f"Run git -C {work_path} status --short, then commit changes or run git -C {work_path} stash push -u.",
             )
         )
     else:
@@ -458,7 +507,7 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
                 "gitsync remote",
                 "gitsync remote does not match the configured cache path.",
                 environment=gitsync.environment,
-                next_action="Run git-ssh-sync doctor --repair to update the gitsync remote.",
+                next_action=f"Run git-ssh-sync recover {project} --yes or run git -C {work_path} remote set-url gitsync {cache_path} on the development environment.",
             )
         )
     else:
@@ -468,7 +517,7 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
                 "gitsync remote",
                 "gitsync remote is missing.",
                 environment=gitsync.environment,
-                next_action="Run git-ssh-sync doctor --repair to add the gitsync remote.",
+                next_action=f"Run git-ssh-sync recover {project} --yes or run git -C {work_path} remote add gitsync {cache_path} on the development environment.",
             )
         )
 
@@ -483,7 +532,34 @@ def _current_local_branch(local_path: Path) -> str:
     return branch
 
 
-def _check_repository(project_config: ProjectConfig, branch: str) -> list[DoctorCheck]:
+def _check_history_connection(
+    *,
+    local_path: Path,
+    left: str,
+    right: str,
+    name: str,
+    next_action: str,
+) -> DoctorCheck:
+    connected = git.run_git(["merge-base", left, right], cwd=local_path, check=False)
+    if connected.returncode == 0:
+        return _ok(
+            "Repository",
+            name,
+            f"{left} and {right} share history.",
+            environment="local",
+        )
+    return _error(
+        "Repository",
+        name,
+        f"{left} and {right} do not appear to share history.",
+        environment="local",
+        next_action=next_action,
+    )
+
+
+def _check_repository(
+    project: str, project_config: ProjectConfig, branch: str
+) -> list[DoctorCheck]:
     checks: list[DoctorCheck] = []
     local_path = Path(project_config.local.repo_path)
 
@@ -533,6 +609,39 @@ def _check_repository(project_config: ProjectConfig, branch: str) -> list[Doctor
         repo_path=project_config.dev.work_path,
         remote_os=project_config.dev.os,
     )
+    cache_repo_url = ssh.remote_git_url(
+        host=project_config.dev.host,
+        user=project_config.dev.user,
+        repo_path=project_config.dev.cache_path,
+        remote_os=project_config.dev.os,
+    )
+
+    try:
+        git.fetch(
+            cache_repo_url,
+            [f"refs/heads/{branch}:refs/remotes/dev-cache/{branch}"],
+            cwd=local_path,
+        )
+    except CommandExecutionError as error:
+        checks.append(
+            _error(
+                "Repository",
+                "cache branch fetch",
+                f"Could not fetch dev-cache/{branch}: {_command_error_message(error)}",
+                environment=error.environment,
+                next_action=f"Run git-ssh-sync recover {project} --yes to repair or seed the cache branch.",
+            )
+        )
+        return checks
+    checks.append(
+        _ok(
+            "Repository",
+            "cache branch fetch",
+            f"Fetched dev-cache/{branch}.",
+            environment="local",
+        )
+    )
+
     try:
         git.fetch(
             dev_repo_url,
@@ -550,29 +659,42 @@ def _check_repository(project_config: ProjectConfig, branch: str) -> list[Doctor
             )
         )
         return checks
-
-    connected = git.run_git(
-        ["merge-base", f"origin/{branch}", f"dev/{branch}"], cwd=local_path, check=False
+    checks.append(
+        _ok(
+            "Repository",
+            "dev branch fetch",
+            f"Fetched dev/{branch}.",
+            environment="local",
+        )
     )
-    if connected.returncode == 0:
-        checks.append(
-            _ok(
-                "Repository",
-                "history connection",
-                f"origin/{branch} and dev/{branch} share history.",
-                environment="local",
-            )
+
+    checks.append(
+        _check_history_connection(
+            local_path=local_path,
+            left=f"origin/{branch}",
+            right=f"dev-cache/{branch}",
+            name="origin/cache history",
+            next_action=f"Run git-ssh-sync recover {project} --yes to reseed the cache branch from origin/{branch}.",
         )
-    else:
-        checks.append(
-            _error(
-                "Repository",
-                "history connection",
-                f"origin/{branch} and dev/{branch} do not appear to share history.",
-                environment="local",
-                next_action="Verify that origin and the development repository were cloned from the same project.",
-            )
+    )
+    checks.append(
+        _check_history_connection(
+            local_path=local_path,
+            left=f"dev-cache/{branch}",
+            right=f"dev/{branch}",
+            name="cache/work history",
+            next_action="Verify that the development work repository was cloned from the configured cache repository.",
         )
+    )
+    checks.append(
+        _check_history_connection(
+            local_path=local_path,
+            left=f"origin/{branch}",
+            right=f"dev/{branch}",
+            name="origin/work history",
+            next_action="Verify that origin and the development repository were cloned from the same project.",
+        )
+    )
     return checks
 
 
@@ -621,10 +743,10 @@ def inspect_project_doctor(project: str, project_config: ProjectConfig) -> Docto
 
         if ssh_available:
             logger.info("Checking development environment...")
-            checks.extend(_check_development(project_config))
+            checks.extend(_check_development(project, project_config, branch))
 
             logger.info("Checking repository configuration...")
-            checks.extend(_check_repository(project_config, branch))
+            checks.extend(_check_repository(project, project_config, branch))
 
     return DoctorReport(
         project=project,

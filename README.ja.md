@@ -197,6 +197,17 @@ git-ssh-sync doctor myproject --repair
 git-ssh-sync doctor myproject --repair --yes
 ```
 
+`pull` / `push` が途中停止した後は、復旧用の入口として `recover` を
+使います。`--yes` なしでは origin、gateway、cache、work repo の状態を
+診断し、具体的な次の操作を表示します。`--yes` 付きでは、cache repo の
+作成、cache branch の投入、`gitsync` remote の修正など、安全な紐付け修復
+だけを実行します。
+
+```bash
+git-ssh-sync recover myproject
+git-ssh-sync recover myproject --yes
+```
+
 `attach` と `doctor --repair` は、既存作業の commit、stash、merge、rebase
 は行いません。開発環境 work repo が dirty な場合や、指定パスが互換性の
 ある Git リポジトリではない場合は停止し、手動復旧手順を表示します。
@@ -371,6 +382,10 @@ git-ssh-sync checkout myproject -b feature/foo --base develop
 
 # 診断
 git-ssh-sync doctor myproject
+
+# 同期中断後の診断と安全な修復
+git-ssh-sync recover myproject
+git-ssh-sync recover myproject --yes
 ```
 
 ## ログ出力

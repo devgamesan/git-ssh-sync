@@ -197,6 +197,17 @@ git-ssh-sync doctor myproject --repair
 git-ssh-sync doctor myproject --repair --yes
 ```
 
+After an interrupted `pull` or `push`, use `recover` as the recovery-oriented
+entry point. Without `--yes`, it diagnoses origin, gateway, cache, and work
+repository state and prints concrete next actions. With `--yes`, it applies only
+safe wiring repairs such as creating the cache repository, seeding the cache
+branch, or fixing the `gitsync` remote.
+
+```bash
+git-ssh-sync recover myproject
+git-ssh-sync recover myproject --yes
+```
+
 `attach` and `doctor --repair` do not commit, stash, merge, or rebase existing
 work. If the development work tree is dirty, or if a path is not a compatible Git
 repository, the command stops and prints the manual recovery action.
@@ -371,6 +382,10 @@ git-ssh-sync checkout myproject -b feature/foo --base develop
 
 # Diagnostics
 git-ssh-sync doctor myproject
+
+# Diagnose and optionally repair after an interrupted sync
+git-ssh-sync recover myproject
+git-ssh-sync recover myproject --yes
 ```
 
 ## Logging
