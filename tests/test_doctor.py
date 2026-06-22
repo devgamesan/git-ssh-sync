@@ -59,7 +59,9 @@ def _install_successful_command_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
         outputs = {
             ("branch", "--show-current"): "main\n",
             ("rev-parse", "--short", "HEAD"): "abc1234\n",
+            ("rev-parse", "--is-bare-repository"): "true\n",
             ("status", "--porcelain"): "",
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
         }
         return _result(("ssh", host), outputs.get(tuple(args), ""))
 
@@ -131,7 +133,9 @@ def test_inspect_project_doctor_reports_dirty_worktree_next_action(
         outputs = {
             ("branch", "--show-current"): "main\n",
             ("rev-parse", "--short", "HEAD"): "abc1234\n",
+            ("rev-parse", "--is-bare-repository"): "true\n",
             ("status", "--porcelain"): " M app.py\n",
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
         }
         return _result(("ssh", host), outputs.get(tuple(args), ""))
 
@@ -243,3 +247,49 @@ def test_doctor_project_raises_when_report_has_errors(
 
     with pytest.raises(DoctorError):
         doctor.doctor_project("myproject")
+
+
+def test_doctor_project_runs_repair_before_final_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reports = [
+        DoctorReport(
+            project="myproject",
+            branch="main",
+            origin_url="git@github.com:example/myproject.git",
+            dev_host="devserver",
+            dev_work_path="/home/user/work/myproject",
+            checks=(
+                doctor.DoctorCheck(
+                    "Development",
+                    "gitsync remote",
+                    "error",
+                    "gitsync remote is missing.",
+                    "ssh:user@devserver",
+                    "Run git-ssh-sync doctor --repair.",
+                ),
+            ),
+        ),
+        DoctorReport(
+            project="myproject",
+            branch="main",
+            origin_url="git@github.com:example/myproject.git",
+            dev_host="devserver",
+            dev_work_path="/home/user/work/myproject",
+            checks=(),
+        ),
+    ]
+    repairs = []
+    monkeypatch.setattr(doctor, "inspect_doctor", lambda project: reports.pop(0))
+    monkeypatch.setattr(doctor, "print_doctor", lambda report: None)
+    monkeypatch.setattr(
+        doctor,
+        "repair_project",
+        lambda project, *, yes=False, confirm=None: repairs.append(
+            (project, yes, confirm)
+        ),
+    )
+
+    doctor.doctor_project("myproject", repair=True, yes=True)
+
+    assert repairs == [("myproject", True, None)]
