@@ -11,6 +11,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from git_ssh_sync import git, ssh
+from git_ssh_sync.attach import AttachError, repair_project
 from git_ssh_sync.config import ProjectConfig, get_project, load_config
 from git_ssh_sync.console import console
 from git_ssh_sync.errors import CommandExecutionError
@@ -309,16 +310,15 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
             )
         )
 
-    checks.append(
-        _check_remote_path(
-            host=host,
-            user=user,
-            path=cache_path,
-            remote_os=remote_os,
-            label="bare cache repo",
-            next_action="Run git-ssh-sync clone for this project to create the cache repository.",
-        )
+    cache_path_check = _check_remote_path(
+        host=host,
+        user=user,
+        path=cache_path,
+        remote_os=remote_os,
+        label="bare cache repo",
+        next_action="Run git-ssh-sync doctor --repair to create the cache repository.",
     )
+    checks.append(cache_path_check)
     checks.append(
         _check_remote_path(
             host=host,
@@ -329,6 +329,35 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
             next_action="Run git-ssh-sync clone for this project to create the work repository.",
         )
     )
+
+    if cache_path_check.status == "ok":
+        cache_bare = ssh.run_remote_git(
+            host,
+            cache_path,
+            ["rev-parse", "--is-bare-repository"],
+            user=user,
+            check=False,
+            remote_os=remote_os,
+        )
+        if cache_bare.returncode == 0 and cache_bare.stdout.strip() == "true":
+            checks.append(
+                _ok(
+                    "Development",
+                    "cache repo format",
+                    "Cache repository is bare.",
+                    environment=cache_bare.environment,
+                )
+            )
+        else:
+            checks.append(
+                _error(
+                    "Development",
+                    "cache repo format",
+                    f"Cache path is not a bare git repository: {_command_error_message(_as_command_error(cache_bare))}",
+                    environment=cache_bare.environment,
+                    next_action="Move the existing path or configure a bare cache repository path.",
+                )
+            )
 
     branch = ssh.run_remote_git(
         host,
@@ -402,6 +431,44 @@ def _check_development(project_config: ProjectConfig) -> list[DoctorCheck]:
                 f"Could not get working tree status: {_command_error_message(_as_command_error(status))}",
                 environment=status.environment,
                 next_action="Inspect the development work repository with git status.",
+            )
+        )
+
+    gitsync = ssh.run_remote_git(
+        host,
+        work_path,
+        ["remote", "get-url", "gitsync"],
+        user=user,
+        check=False,
+        remote_os=remote_os,
+    )
+    if gitsync.returncode == 0 and gitsync.stdout.strip() == cache_path:
+        checks.append(
+            _ok(
+                "Development",
+                "gitsync remote",
+                "gitsync remote matches cache path.",
+                environment=gitsync.environment,
+            )
+        )
+    elif gitsync.returncode == 0:
+        checks.append(
+            _error(
+                "Development",
+                "gitsync remote",
+                "gitsync remote does not match the configured cache path.",
+                environment=gitsync.environment,
+                next_action="Run git-ssh-sync doctor --repair to update the gitsync remote.",
+            )
+        )
+    else:
+        checks.append(
+            _error(
+                "Development",
+                "gitsync remote",
+                "gitsync remote is missing.",
+                environment=gitsync.environment,
+                next_action="Run git-ssh-sync doctor --repair to add the gitsync remote.",
             )
         )
 
@@ -615,11 +682,25 @@ def print_doctor(report: DoctorReport) -> None:
             )
 
 
-def doctor_project(project: str) -> None:
+def doctor_project(
+    project: str,
+    *,
+    repair: bool = False,
+    yes: bool = False,
+    confirm=None,
+) -> None:
     """Run and print diagnosis for a configured project."""
     logger.info(f"Running doctor for project '{project}'")
     report = inspect_doctor(project)
     print_doctor(report)
+
+    if repair:
+        try:
+            repair_project(project, yes=yes, confirm=confirm)
+        except AttachError as error:
+            raise DoctorError(str(error)) from error
+        report = inspect_doctor(project)
+        print_doctor(report)
 
     if report.has_errors:
         logger.error(f"Doctor found errors for project '{project}'")

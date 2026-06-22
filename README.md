@@ -164,6 +164,43 @@ Afterward, the work repository on the development environment can be used as a n
 
 `doctor` checks the local environment, SSH connection, fetch/push permissions to origin, and repository deployment on the development environment. Run this not only for the first time but also when synchronization is not working properly.
 
+## Attaching Existing Repositories
+
+If the gateway repository, development work repository, or cache repository already
+exists, use `attach` instead of `clone`.
+
+```bash
+git-ssh-sync init myproject \
+  --origin git@github.com:example/myproject.git \
+  --dev-host devserver \
+  --dev-user user \
+  --dev-path /home/user/work/myproject
+git-ssh-sync attach myproject --dry-run
+git-ssh-sync attach myproject
+git-ssh-sync doctor myproject
+```
+
+`attach` inspects the configured origin URL, current branch, development work
+tree state, bare cache repository, and `gitsync` remote. Before changing
+anything, it prints the operations it will apply. Use `--yes` for non-interactive
+execution after reviewing the plan.
+
+```bash
+git-ssh-sync attach myproject --yes
+```
+
+If only the `gitsync` remote or cache wiring is missing or mismatched, run
+`doctor --repair` to inspect and repair it through the same preflight checks.
+
+```bash
+git-ssh-sync doctor myproject --repair
+git-ssh-sync doctor myproject --repair --yes
+```
+
+`attach` and `doctor --repair` do not commit, stash, merge, or rebase existing
+work. If the development work tree is dirty, or if a path is not a compatible Git
+repository, the command stops and prints the manual recovery action.
+
 ## Daily Development Workflow
 
 For daily development, `pull` from the local machine before starting work, commit normally in the development environment, and finally `push` from the local machine.

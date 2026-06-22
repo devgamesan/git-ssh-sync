@@ -7,6 +7,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from git_ssh_sync import __version__
+from git_ssh_sync.attach import AttachError, attach_project
 from git_ssh_sync.branch import BranchError, branch_project
 from git_ssh_sync.clone import CloneError, clone_project
 from git_ssh_sync.config import (
@@ -326,6 +327,40 @@ def clone_command(
     console.print(f"Project '{project}' cloned.")
 
 
+@app.command("attach")
+def attach_command(
+    project: Annotated[str, typer.Argument(help="Project name to attach.")],
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes", "-y", help="Apply planned operations without confirmation."
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Show the attach plan without changing repositories."
+        ),
+    ] = False,
+) -> None:
+    """Attach existing repositories to git-ssh-sync management."""
+    try:
+        attach_project(
+            project,
+            yes=yes,
+            dry_run=dry_run,
+            confirm=lambda message: typer.confirm(message),
+        )
+    except (ConfigError, AttachError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+    if dry_run:
+        console.print(f"Project '{project}' attach dry-run completed.")
+    else:
+        console.print(f"Project '{project}' attached.")
+
+
 @app.command("status")
 def status_command(
     project: Annotated[str, typer.Argument(help="Project name to inspect.")],
@@ -450,10 +485,25 @@ def checkout_command(
 @app.command("doctor")
 def doctor_command(
     project: Annotated[str, typer.Argument(help="Project name to diagnose.")],
+    repair: Annotated[
+        bool,
+        typer.Option("--repair", help="Repair missing or mismatched gitsync wiring."),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes", "-y", help="Apply repair operations without confirmation."
+        ),
+    ] = False,
 ) -> None:
     """Check local, SSH, Git, and repository layout prerequisites."""
     try:
-        doctor_project(project)
+        doctor_project(
+            project,
+            repair=repair,
+            yes=yes,
+            confirm=lambda message: typer.confirm(message),
+        )
     except (ConfigError, DoctorError, CommandExecutionError) as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(code=1) from error

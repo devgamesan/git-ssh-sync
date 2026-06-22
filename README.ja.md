@@ -164,6 +164,43 @@ git-ssh-sync doctor myproject
 
 `doctor` はローカル環境、SSH 接続、origin への fetch / push 権限、開発環境側のリポジトリ配置を確認します。初回だけでなく、同期がうまくいかない時にも最初に実行してください。
 
+## 既存リポジトリの取り込み
+
+gateway repo、開発環境の work repo、cache repo がすでに存在する場合は、
+`clone` ではなく `attach` を使います。
+
+```bash
+git-ssh-sync init myproject \
+  --origin git@github.com:example/myproject.git \
+  --dev-host devserver \
+  --dev-user user \
+  --dev-path /home/user/work/myproject
+git-ssh-sync attach myproject --dry-run
+git-ssh-sync attach myproject
+git-ssh-sync doctor myproject
+```
+
+`attach` は、設定された origin URL、現在ブランチ、開発環境 work repo の
+dirty 状態、bare cache repo、`gitsync` remote を検査します。変更前に実行
+予定の操作を表示します。内容確認済みで非対話実行したい場合は `--yes` を
+付けます。
+
+```bash
+git-ssh-sync attach myproject --yes
+```
+
+`gitsync` remote や cache との紐付けだけが不足・不一致の場合は、
+`doctor --repair` でも同じ preflight check を通して修復できます。
+
+```bash
+git-ssh-sync doctor myproject --repair
+git-ssh-sync doctor myproject --repair --yes
+```
+
+`attach` と `doctor --repair` は、既存作業の commit、stash、merge、rebase
+は行いません。開発環境 work repo が dirty な場合や、指定パスが互換性の
+ある Git リポジトリではない場合は停止し、手動復旧手順を表示します。
+
 ## 日常開発 workflow
 
 日常開発では、作業開始前にローカルマシンから `pull` し、開発環境で通常どおりコミットし、最後にローカルマシンから `push` します。

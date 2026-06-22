@@ -2,6 +2,7 @@ from typer.testing import CliRunner
 
 from git_ssh_sync import cli
 from git_ssh_sync.cli import app
+from git_ssh_sync.attach import AttachError
 from git_ssh_sync.clone import CloneError
 from git_ssh_sync.config import default_config_path, get_project, load_config
 from git_ssh_sync.dev import DevCommandError
@@ -22,6 +23,7 @@ def test_top_level_help() -> None:
         "config",
         "init",
         "clone",
+        "attach",
         "status",
         "dev",
         "branch",
@@ -38,6 +40,7 @@ def test_subcommand_help() -> None:
         "config",
         "init",
         "clone",
+        "attach",
         "status",
         "dev",
         "branch",
@@ -325,6 +328,52 @@ def test_clone_command_reports_clone_error(monkeypatch) -> None:
     assert "[local] path already exists" in result.output
 
 
+def test_attach_command_runs_attach_workflow(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "attach_project",
+        lambda project, *, yes=False, dry_run=False, confirm=None: calls.append(
+            (project, yes, dry_run, confirm is not None)
+        ),
+    )
+
+    result = runner.invoke(app, ["attach", "myproject", "--yes"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", True, False, True)]
+    assert "Project 'myproject' attached." in result.output
+
+
+def test_attach_command_passes_dry_run(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "attach_project",
+        lambda project, *, yes=False, dry_run=False, confirm=None: calls.append(
+            (project, yes, dry_run)
+        ),
+    )
+
+    result = runner.invoke(app, ["attach", "myproject", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", False, True)]
+    assert "Project 'myproject' attach dry-run completed." in result.output
+
+
+def test_attach_command_reports_attach_error(monkeypatch) -> None:
+    def fail(project: str, **kwargs) -> None:
+        raise AttachError("Attach preflight failed.")
+
+    monkeypatch.setattr(cli, "attach_project", fail)
+
+    result = runner.invoke(app, ["attach", "myproject"])
+
+    assert result.exit_code == 1
+    assert "Attach preflight failed." in result.output
+
+
 def test_status_command_runs_status_workflow(monkeypatch) -> None:
     calls = []
     monkeypatch.setattr(cli, "status_project", lambda project: calls.append(project))
@@ -413,16 +462,38 @@ def test_branch_command_runs_branch_workflow(monkeypatch) -> None:
 
 def test_doctor_command_runs_doctor_workflow(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(cli, "doctor_project", lambda project: calls.append(project))
+    monkeypatch.setattr(
+        cli,
+        "doctor_project",
+        lambda project, *, repair=False, yes=False, confirm=None: calls.append(
+            (project, repair, yes, confirm is not None)
+        ),
+    )
 
     result = runner.invoke(app, ["doctor", "myproject"])
 
     assert result.exit_code == 0
-    assert calls == ["myproject"]
+    assert calls == [("myproject", False, False, True)]
+
+
+def test_doctor_command_passes_repair_options(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "doctor_project",
+        lambda project, *, repair=False, yes=False, confirm=None: calls.append(
+            (project, repair, yes)
+        ),
+    )
+
+    result = runner.invoke(app, ["doctor", "myproject", "--repair", "--yes"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", True, True)]
 
 
 def test_doctor_command_reports_doctor_error(monkeypatch) -> None:
-    def fail(project: str) -> None:
+    def fail(project: str, **kwargs) -> None:
         raise DoctorError("Doctor found errors.")
 
     monkeypatch.setattr(cli, "doctor_project", fail)
