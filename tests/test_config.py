@@ -44,6 +44,7 @@ def test_init_project_saves_defaults_and_expands_local_path(
     assert loaded_project.options.lfs is False
     assert loaded_project.options.submodules is False
     assert loaded_project.options.ff_only is True
+    assert loaded_project.dev.os == "posix"
 
 
 def test_register_project_requires_force_for_existing_project(tmp_path: Path) -> None:
@@ -119,6 +120,7 @@ def test_update_project_changes_selected_fields(tmp_path: Path) -> None:
         "myproject",
         origin="git@github.com:example/second.git",
         dev_host="devbox",
+        dev_os="windows",
         dev_work_path="/home/user/src/myproject",
         lfs=True,
         config_path=config_path,
@@ -126,6 +128,7 @@ def test_update_project_changes_selected_fields(tmp_path: Path) -> None:
 
     assert updated.origin == "git@github.com:example/second.git"
     assert updated.dev.host == "devbox"
+    assert updated.dev.os == "windows"
     assert updated.dev.user == "user"
     assert updated.dev.work_path == "/home/user/src/myproject"
     assert updated.options.lfs is True

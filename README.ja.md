@@ -79,7 +79,20 @@ git-ssh-sync init myproject \
 - `--origin`: GitHub / GitLab 側のリポジトリ URL
 - `--dev-host`: 開発環境の SSH ホスト
 - `--dev-user`: 開発環境の SSH ユーザー
+- `--dev-os`: 開発環境の OS。`posix` または `windows`（デフォルト: `posix`）
 - `--dev-path`: 開発環境上の work repo パス
+
+開発環境が Windows の場合は `--dev-os windows` を指定し、Windows パスを使います。
+Windows への SSH コマンドは PowerShell 経由で実行します。
+
+```powershell
+git-ssh-sync init myproject `
+  --origin git@github.com:example/myproject.git `
+  --dev-host devserver `
+  --dev-user user `
+  --dev-os windows `
+  --dev-path C:\Users\user\work\myproject
+```
 
 `--origin` には、`git clone` や `git fetch` で指定できるリモート URL を指定します。主な形式は次のとおりです。
 
@@ -117,6 +130,7 @@ git-ssh-sync config show myproject
 git-ssh-sync config set myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
+  --dev-os posix \
   --dev-path /home/user/work/myproject
 
 # 確認後にプロジェクトを削除
@@ -150,6 +164,54 @@ git-ssh-sync doctor myproject
 
 `doctor` はローカル環境、SSH 接続、origin への fetch / push 権限、開発環境側のリポジトリ配置を確認します。初回だけでなく、同期がうまくいかない時にも最初に実行してください。
 
+## 既存リポジトリの取り込み
+
+gateway repo、開発環境の work repo、cache repo がすでに存在する場合は、
+`clone` ではなく `attach` を使います。
+
+```bash
+git-ssh-sync init myproject \
+  --origin git@github.com:example/myproject.git \
+  --dev-host devserver \
+  --dev-user user \
+  --dev-path /home/user/work/myproject
+git-ssh-sync attach myproject --dry-run
+git-ssh-sync attach myproject
+git-ssh-sync doctor myproject
+```
+
+`attach` は、設定された origin URL、現在ブランチ、開発環境 work repo の
+dirty 状態、bare cache repo、`gitsync` remote を検査します。変更前に実行
+予定の操作を表示します。内容確認済みで非対話実行したい場合は `--yes` を
+付けます。
+
+```bash
+git-ssh-sync attach myproject --yes
+```
+
+`gitsync` remote や cache との紐付けだけが不足・不一致の場合は、
+`doctor --repair` でも同じ preflight check を通して修復できます。
+
+```bash
+git-ssh-sync doctor myproject --repair
+git-ssh-sync doctor myproject --repair --yes
+```
+
+`pull` / `push` が途中停止した後は、復旧用の入口として `recover` を
+使います。`--yes` なしでは origin、gateway、cache、work repo の状態を
+診断し、具体的な次の操作を表示します。`--yes` 付きでは、cache repo の
+作成、cache branch の投入、`gitsync` remote の修正など、安全な紐付け修復
+だけを実行します。
+
+```bash
+git-ssh-sync recover myproject
+git-ssh-sync recover myproject --yes
+```
+
+`attach` と `doctor --repair` は、既存作業の commit、stash、merge、rebase
+は行いません。開発環境 work repo が dirty な場合や、指定パスが互換性の
+ある Git リポジトリではない場合は停止し、手動復旧手順を表示します。
+
 ## 日常開発 workflow
 
 日常開発では、作業開始前にローカルマシンから `pull` し、開発環境で通常どおりコミットし、最後にローカルマシンから `push` します。
@@ -177,6 +239,13 @@ git-ssh-sync push myproject
 
 `pull` と `push` は、開発環境 work repo のカレントブランチを対象にします。別のブランチを同期したい場合は、先に `checkout` で work repo のブランチを切り替えます。
 
+ref を変更する前に実行予定の操作と preflight check を確認するには `--dry-run` を使います。
+
+```bash
+git-ssh-sync pull myproject --dry-run
+git-ssh-sync push myproject --dry-run
+```
+
 ## ブランチ切り替え workflow
 
 既存ブランチへ切り替える場合は、ローカルマシンから `checkout` を実行します。
@@ -191,6 +260,13 @@ git-ssh-sync checkout myproject feature/foo
 
 ```bash
 git-ssh-sync checkout myproject -b feature/foo --base develop
+```
+
+origin、cache、work repo の ref を変更せずにブランチ切り替えやブランチ作成を確認するには、`checkout` にも `--dry-run` を付けます。
+
+```bash
+git-ssh-sync checkout myproject feature/foo --dry-run
+git-ssh-sync checkout myproject -b feature/foo --base develop --dry-run
 ```
 
 開発環境:
@@ -225,6 +301,20 @@ git-ssh-sync status myproject
 ```bash
 git-ssh-sync branch myproject
 ```
+
+ローカルマシンから開発環境 work repo の状態を直接確認するには、参照専用の
+`dev` コマンドを使います。
+
+```bash
+git-ssh-sync dev status myproject
+git-ssh-sync dev diff myproject
+git-ssh-sync dev diff myproject --stat
+git-ssh-sync dev log myproject --max-count 5
+```
+
+これらのコマンドは SSH 越しに開発環境 work repo で `git status`、
+`git diff`、`git log` を実行します。origin、ローカル gateway repo、
+開発環境 cache repo、開発環境 work repo の ref は更新しません。
 
 ## 運用ルール
 
@@ -272,6 +362,12 @@ git-ssh-sync status myproject
 # ブランチ状態を確認
 git-ssh-sync branch myproject
 
+# 開発環境 work repo の状態を確認
+git-ssh-sync dev status myproject
+
+# 開発環境 work repo の差分を確認
+git-ssh-sync dev diff myproject --stat
+
 # origin の変更を開発環境へ反映
 git-ssh-sync pull myproject
 
@@ -286,7 +382,60 @@ git-ssh-sync checkout myproject -b feature/foo --base develop
 
 # 診断
 git-ssh-sync doctor myproject
+
+# 同期中断後の診断と安全な修復
+git-ssh-sync recover myproject
+git-ssh-sync recover myproject --yes
 ```
+
+## ログ出力
+
+`git-ssh-sync` は、トラブルシューティングと同期操作の監視のための詳細なログ出力をサポートしています。
+
+### ログレベル
+
+デフォルトでは、警告とエラーのみが表示されます。以下のオプションで詳細度を上げることができます：
+
+- `--verbose`, `-v`: INFO レベルのログを有効化（操作進捗、Git/SSH コマンド）
+- `--debug`, `-d`: DEBUG レベルのログを有効化（全デバッグ情報、コマンド出力、スタックトレース）
+
+### ログファイル出力
+
+ログは自動的に `~/.cache/git-ssh-sync/logs/git-ssh-sync.log` に保存されます。ログファイルは、コンソール出力の設定に関係なく、すべてのログレベル（DEBUG 以上）を含みます。
+
+`--log-file` でカスタムログファイルパスを指定できます：
+
+```bash
+git-ssh-sync pull myproject --log-file /tmp/my-sync.log
+```
+
+### 使用例
+
+```bash
+# デフォルト（警告とエラーのみ）
+git-ssh-sync pull myproject
+
+# 詳細出力（操作進捗）
+git-ssh-sync pull myproject --verbose
+
+# デバッグ出力（コマンド実行などの全詳細）
+git-ssh-sync pull myproject --debug
+
+# カスタムログファイル付き詳細出力
+git-ssh-sync push myproject --verbose --log-file /tmp/sync.log
+
+# 診断時のデバッグ出力
+git-ssh-sync doctor myproject --debug
+```
+
+### ログ内容
+
+- **INFO**: 操作進捗（pull/push/checkout）、成功メッセージ
+- **DEBUG**: 実行された Git/SSH コマンド、戻り値、標準出力/標準エラー、作業ディレクトリ
+- **WARNING**: 回復可能な問題（LFS、サブモジュール検出）
+- **ERROR**: 失敗、実行エラー
+
+ログは、SSH 接続の問題、Git コマンドの失敗、同期フローの理解などのトラブルシューティング時に特に役立ちます。
 
 ## 開発者向け
 

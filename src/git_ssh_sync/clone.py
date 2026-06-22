@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import quote
 
 from git_ssh_sync import git, ssh
 from git_ssh_sync.config import get_project, load_config
@@ -14,18 +13,17 @@ class CloneError(RuntimeError):
     """Raised when the clone workflow would overwrite existing data."""
 
 
-def _cache_url(*, host: str, user: str, cache_path: str) -> str:
-    quoted_path = quote(cache_path, safe="/~")
-    return f"ssh://{user}@{host}{quoted_path}"
-
-
 def _ensure_local_missing(path: Path) -> None:
     if path.exists():
         raise CloneError(f"[local] path already exists: {path}")
 
 
-def _ensure_remote_missing(*, host: str, user: str, path: str) -> None:
-    result = ssh.run_ssh(host, ["test", "-e", path], user=user, check=False)
+def _ensure_remote_missing(
+    *, host: str, user: str, path: str, remote_os: ssh.RemoteOS
+) -> None:
+    result = ssh.remote_path_exists(
+        host, path, user=user, remote_os=remote_os, path_type="any"
+    )
     if result.returncode == 0:
         raise CloneError(f"[{result.environment}] path already exists: {path}")
     if result.returncode == 1:
@@ -38,10 +36,6 @@ def _ensure_remote_missing(*, host: str, user: str, path: str) -> None:
         stdout=result.stdout,
         stderr=result.stderr,
     )
-
-
-def _remote_parent(path: str) -> str:
-    return str(Path(path).parent)
 
 
 def _local_current_branch(local_path: Path) -> str:
@@ -60,22 +54,36 @@ def clone_project(project: str) -> None:
     local_path = Path(project_config.local.repo_path)
     dev_host = project_config.dev.host
     dev_user = project_config.dev.user
+    dev_os = project_config.dev.os
     cache_path = project_config.dev.cache_path
     work_path = project_config.dev.work_path
 
     _ensure_local_missing(local_path)
-    _ensure_remote_missing(host=dev_host, user=dev_user, path=cache_path)
-    _ensure_remote_missing(host=dev_host, user=dev_user, path=work_path)
+    _ensure_remote_missing(
+        host=dev_host, user=dev_user, path=cache_path, remote_os=dev_os
+    )
+    _ensure_remote_missing(
+        host=dev_host, user=dev_user, path=work_path, remote_os=dev_os
+    )
 
     local_path.parent.mkdir(parents=True, exist_ok=True)
     git.run_git(["clone", project_config.origin, str(local_path)])
     git.fetch("origin", cwd=local_path)
     branch = _local_current_branch(local_path)
 
-    ssh.run_ssh(dev_host, ["mkdir", "-p", _remote_parent(cache_path)], user=dev_user)
-    ssh.run_ssh(dev_host, ["git", "init", "--bare", cache_path], user=dev_user)
+    ssh.remote_mkdir(
+        dev_host, ssh.remote_parent(cache_path, dev_os), user=dev_user, remote_os=dev_os
+    )
+    ssh.run_remote_command(
+        dev_host,
+        ["git", "init", "--bare", cache_path],
+        user=dev_user,
+        remote_os=dev_os,
+    )
 
-    remote_cache = _cache_url(host=dev_host, user=dev_user, cache_path=cache_path)
+    remote_cache = ssh.remote_git_url(
+        host=dev_host, user=dev_user, repo_path=cache_path, remote_os=dev_os
+    )
     git.push(
         remote_cache,
         [f"refs/remotes/origin/{branch}:refs/heads/{branch}"],
@@ -84,9 +92,22 @@ def clone_project(project: str) -> None:
     if project_config.options.sync_tags:
         git.push(remote_cache, ["--tags"], cwd=local_path)
 
-    ssh.run_ssh(dev_host, ["mkdir", "-p", _remote_parent(work_path)], user=dev_user)
-    ssh.run_ssh(dev_host, ["git", "clone", cache_path, work_path], user=dev_user)
-    ssh.run_remote_git(
-        dev_host, work_path, ["remote", "rename", "origin", "gitsync"], user=dev_user
+    ssh.remote_mkdir(
+        dev_host, ssh.remote_parent(work_path, dev_os), user=dev_user, remote_os=dev_os
     )
-    ssh.run_remote_git(dev_host, work_path, ["switch", branch], user=dev_user)
+    ssh.run_remote_command(
+        dev_host,
+        ["git", "clone", cache_path, work_path],
+        user=dev_user,
+        remote_os=dev_os,
+    )
+    ssh.run_remote_git(
+        dev_host,
+        work_path,
+        ["remote", "rename", "origin", "gitsync"],
+        user=dev_user,
+        remote_os=dev_os,
+    )
+    ssh.run_remote_git(
+        dev_host, work_path, ["switch", branch], user=dev_user, remote_os=dev_os
+    )

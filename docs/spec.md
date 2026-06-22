@@ -656,6 +656,7 @@ projects:
     dev:
       host: devserver
       user: user
+      os: posix
       work_path: /home/user/work/myproject
       cache_path: /home/user/.git-ssh-sync/cache/myproject.git
 

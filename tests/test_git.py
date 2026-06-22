@@ -1,7 +1,9 @@
+from io import StringIO
 from pathlib import Path
 from subprocess import CompletedProcess
 
 import pytest
+from rich.console import Console
 
 from git_ssh_sync import git
 from git_ssh_sync.errors import CommandExecutionError
@@ -97,14 +99,20 @@ def test_run_git_can_return_nonzero_result_without_check(
     assert result.stderr == "no match\n"
 
 
-def test_verbose_prints_command(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_verbose_prints_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that verbose=True prints command via console.print()."""
+
     def fake_run(command, **kwargs):
         return CompletedProcess(command, 0, stdout="", stderr="")
 
     monkeypatch.setattr(git.subprocess, "run", fake_run)
 
+    # Capture console output
+    output = StringIO()
+    test_console = Console(file=output, force_terminal=True)
+    monkeypatch.setattr(git, "console", test_console)
+
     git.fetch(verbose=True)
 
-    assert "$ git fetch origin" in capsys.readouterr().out
+    captured = output.getvalue()
+    assert "$ git fetch origin" in captured

@@ -59,7 +59,9 @@ def _install_successful_command_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
         outputs = {
             ("branch", "--show-current"): "main\n",
             ("rev-parse", "--short", "HEAD"): "abc1234\n",
+            ("rev-parse", "--is-bare-repository"): "true\n",
             ("status", "--porcelain"): "",
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
         }
         return _result(("ssh", host), outputs.get(tuple(args), ""))
 
@@ -88,7 +90,11 @@ def test_inspect_project_doctor_collects_successful_checks(
         _by_name(report, "working tree")[0].message
         == "Working tree is clean at abc1234."
     )
-    assert _by_name(report, "history connection")[0].status == "ok"
+    assert _by_name(report, "cache branch fetch")[0].status == "ok"
+    assert _by_name(report, "dev branch fetch")[0].status == "ok"
+    assert _by_name(report, "origin/cache history")[0].status == "ok"
+    assert _by_name(report, "cache/work history")[0].status == "ok"
+    assert _by_name(report, "origin/work history")[0].status == "ok"
 
 
 def test_inspect_project_doctor_warns_for_lfs_and_submodules(
@@ -131,7 +137,9 @@ def test_inspect_project_doctor_reports_dirty_worktree_next_action(
         outputs = {
             ("branch", "--show-current"): "main\n",
             ("rev-parse", "--short", "HEAD"): "abc1234\n",
+            ("rev-parse", "--is-bare-repository"): "true\n",
             ("status", "--porcelain"): " M app.py\n",
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
         }
         return _result(("ssh", host), outputs.get(tuple(args), ""))
 
@@ -143,9 +151,95 @@ def test_inspect_project_doctor_reports_dirty_worktree_next_action(
     assert report.has_errors is True
     assert dirty.status == "error"
     assert "abc1234" in dirty.message
-    assert (
-        dirty.next_action == "Commit or stash changes on the development environment."
+    assert "git -C /home/user/work/myproject status --short" in (
+        dirty.next_action or ""
     )
+    assert "stash push -u" in (dirty.next_action or "")
+
+
+def test_inspect_project_doctor_reports_detached_worktree_next_action(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install_successful_command_fakes(monkeypatch)
+
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
+        outputs = {
+            ("branch", "--show-current"): "",
+            ("rev-parse", "--short", "HEAD"): "abc1234\n",
+            ("rev-parse", "--is-bare-repository"): "true\n",
+            ("status", "--porcelain"): "",
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
+        }
+        return _result(("ssh", host), outputs.get(tuple(args), ""))
+
+    monkeypatch.setattr(doctor.ssh, "run_remote_git", fake_run_remote_git)
+
+    report = doctor.inspect_project_doctor("myproject", _project_config(tmp_path))
+
+    branch = _by_name(report, "work repo branch")[0]
+    assert report.has_errors is True
+    assert branch.status == "error"
+    assert "detached HEAD" in branch.message
+    assert "git-ssh-sync checkout myproject <branch>" in (branch.next_action or "")
+
+
+def test_inspect_project_doctor_reports_gitsync_mismatch_next_action(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install_successful_command_fakes(monkeypatch)
+
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
+        outputs = {
+            ("branch", "--show-current"): "main\n",
+            ("rev-parse", "--short", "HEAD"): "abc1234\n",
+            ("rev-parse", "--is-bare-repository"): "true\n",
+            ("status", "--porcelain"): "",
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/other.git\n",
+        }
+        return _result(("ssh", host), outputs.get(tuple(args), ""))
+
+    monkeypatch.setattr(doctor.ssh, "run_remote_git", fake_run_remote_git)
+
+    report = doctor.inspect_project_doctor("myproject", _project_config(tmp_path))
+
+    gitsync = _by_name(report, "gitsync remote")[0]
+    assert report.has_errors is True
+    assert gitsync.status == "error"
+    assert "recover myproject --yes" in (gitsync.next_action or "")
+    assert "remote set-url gitsync" in (gitsync.next_action or "")
+
+
+def test_inspect_project_doctor_reports_missing_cache_branch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install_successful_command_fakes(monkeypatch)
+
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
+        if tuple(args) == ("show-ref", "--verify", "--quiet", "refs/heads/main"):
+            return _result(("ssh", host), returncode=1)
+        outputs = {
+            ("branch", "--show-current"): "main\n",
+            ("rev-parse", "--short", "HEAD"): "abc1234\n",
+            ("rev-parse", "--is-bare-repository"): "true\n",
+            ("status", "--porcelain"): "",
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
+        }
+        return _result(("ssh", host), outputs.get(tuple(args), ""))
+
+    monkeypatch.setattr(doctor.ssh, "run_remote_git", fake_run_remote_git)
+
+    report = doctor.inspect_project_doctor("myproject", _project_config(tmp_path))
+
+    cache_branch = _by_name(report, "cache branch")[0]
+    assert report.has_errors is True
+    assert cache_branch.status == "error"
+    assert "recover myproject --yes" in (cache_branch.next_action or "")
 
 
 def test_inspect_project_doctor_reports_missing_gateway_repo(
@@ -243,3 +337,49 @@ def test_doctor_project_raises_when_report_has_errors(
 
     with pytest.raises(DoctorError):
         doctor.doctor_project("myproject")
+
+
+def test_doctor_project_runs_repair_before_final_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reports = [
+        DoctorReport(
+            project="myproject",
+            branch="main",
+            origin_url="git@github.com:example/myproject.git",
+            dev_host="devserver",
+            dev_work_path="/home/user/work/myproject",
+            checks=(
+                doctor.DoctorCheck(
+                    "Development",
+                    "gitsync remote",
+                    "error",
+                    "gitsync remote is missing.",
+                    "ssh:user@devserver",
+                    "Run git-ssh-sync doctor --repair.",
+                ),
+            ),
+        ),
+        DoctorReport(
+            project="myproject",
+            branch="main",
+            origin_url="git@github.com:example/myproject.git",
+            dev_host="devserver",
+            dev_work_path="/home/user/work/myproject",
+            checks=(),
+        ),
+    ]
+    repairs = []
+    monkeypatch.setattr(doctor, "inspect_doctor", lambda project: reports.pop(0))
+    monkeypatch.setattr(doctor, "print_doctor", lambda report: None)
+    monkeypatch.setattr(
+        doctor,
+        "repair_project",
+        lambda project, *, yes=False, confirm=None: repairs.append(
+            (project, yes, confirm)
+        ),
+    )
+
+    doctor.doctor_project("myproject", repair=True, yes=True)
+
+    assert repairs == [("myproject", True, None)]

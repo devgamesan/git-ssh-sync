@@ -79,7 +79,20 @@ Key parameters:
 - `--origin`: Repository URL on the GitHub / GitLab side
 - `--dev-host`: SSH host of the development environment
 - `--dev-user`: SSH user of the development environment
+- `--dev-os`: Development environment OS, either `posix` or `windows` (default: `posix`)
 - `--dev-path`: Path to the work repository on the development environment
+
+For a Windows development environment, specify `--dev-os windows` and use Windows
+paths. Windows SSH commands are executed through PowerShell.
+
+```powershell
+git-ssh-sync init myproject `
+  --origin git@github.com:example/myproject.git `
+  --dev-host devserver `
+  --dev-user user `
+  --dev-os windows `
+  --dev-path C:\Users\user\work\myproject
+```
 
 For `--origin`, specify a remote URL that can be used with `git clone` or `git fetch`. Main formats are:
 
@@ -117,6 +130,7 @@ git-ssh-sync config show myproject
 git-ssh-sync config set myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
+  --dev-os posix \
   --dev-path /home/user/work/myproject
 
 # Remove a project after confirmation
@@ -150,6 +164,54 @@ Afterward, the work repository on the development environment can be used as a n
 
 `doctor` checks the local environment, SSH connection, fetch/push permissions to origin, and repository deployment on the development environment. Run this not only for the first time but also when synchronization is not working properly.
 
+## Attaching Existing Repositories
+
+If the gateway repository, development work repository, or cache repository already
+exists, use `attach` instead of `clone`.
+
+```bash
+git-ssh-sync init myproject \
+  --origin git@github.com:example/myproject.git \
+  --dev-host devserver \
+  --dev-user user \
+  --dev-path /home/user/work/myproject
+git-ssh-sync attach myproject --dry-run
+git-ssh-sync attach myproject
+git-ssh-sync doctor myproject
+```
+
+`attach` inspects the configured origin URL, current branch, development work
+tree state, bare cache repository, and `gitsync` remote. Before changing
+anything, it prints the operations it will apply. Use `--yes` for non-interactive
+execution after reviewing the plan.
+
+```bash
+git-ssh-sync attach myproject --yes
+```
+
+If only the `gitsync` remote or cache wiring is missing or mismatched, run
+`doctor --repair` to inspect and repair it through the same preflight checks.
+
+```bash
+git-ssh-sync doctor myproject --repair
+git-ssh-sync doctor myproject --repair --yes
+```
+
+After an interrupted `pull` or `push`, use `recover` as the recovery-oriented
+entry point. Without `--yes`, it diagnoses origin, gateway, cache, and work
+repository state and prints concrete next actions. With `--yes`, it applies only
+safe wiring repairs such as creating the cache repository, seeding the cache
+branch, or fixing the `gitsync` remote.
+
+```bash
+git-ssh-sync recover myproject
+git-ssh-sync recover myproject --yes
+```
+
+`attach` and `doctor --repair` do not commit, stash, merge, or rebase existing
+work. If the development work tree is dirty, or if a path is not a compatible Git
+repository, the command stops and prints the manual recovery action.
+
 ## Daily Development Workflow
 
 For daily development, `pull` from the local machine before starting work, commit normally in the development environment, and finally `push` from the local machine.
@@ -177,6 +239,13 @@ git-ssh-sync push myproject
 
 `pull` and `push` target the current branch of the work repository on the development environment. To synchronize a different branch, switch the work repository branch with `checkout` first.
 
+Use `--dry-run` to inspect the planned operations and preflight checks before changing refs:
+
+```bash
+git-ssh-sync pull myproject --dry-run
+git-ssh-sync push myproject --dry-run
+```
+
 ## Branch Switching Workflow
 
 To switch to an existing branch, execute `checkout` from the local machine.
@@ -191,6 +260,13 @@ To create a new branch, use `-b`. Use `--base` together to explicitly specify th
 
 ```bash
 git-ssh-sync checkout myproject -b feature/foo --base develop
+```
+
+To preview a branch switch or branch creation without changing origin, cache, or work repo refs:
+
+```bash
+git-ssh-sync checkout myproject feature/foo --dry-run
+git-ssh-sync checkout myproject -b feature/foo --base develop --dry-run
 ```
 
 Development environment:
@@ -225,6 +301,20 @@ To list existence status and ahead/behind for each branch, use `branch`.
 ```bash
 git-ssh-sync branch myproject
 ```
+
+To inspect the development work repo directly from the local machine, use the
+read-only `dev` commands.
+
+```bash
+git-ssh-sync dev status myproject
+git-ssh-sync dev diff myproject
+git-ssh-sync dev diff myproject --stat
+git-ssh-sync dev log myproject --max-count 5
+```
+
+These commands run `git status`, `git diff`, or `git log` on the development
+work repo over SSH. They do not update origin, the local gateway repo, the
+development cache repo, or the development work repo refs.
 
 ## Operational Rules
 
@@ -272,6 +362,12 @@ git-ssh-sync status myproject
 # Check branch status
 git-ssh-sync branch myproject
 
+# Inspect development work repo status
+git-ssh-sync dev status myproject
+
+# Inspect development work repo diff
+git-ssh-sync dev diff myproject --stat
+
 # Reflect changes from origin to development environment
 git-ssh-sync pull myproject
 
@@ -286,7 +382,60 @@ git-ssh-sync checkout myproject -b feature/foo --base develop
 
 # Diagnostics
 git-ssh-sync doctor myproject
+
+# Diagnose and optionally repair after an interrupted sync
+git-ssh-sync recover myproject
+git-ssh-sync recover myproject --yes
 ```
+
+## Logging
+
+`git-ssh-sync` supports detailed logging for troubleshooting and monitoring synchronization operations.
+
+### Log Levels
+
+By default, only warnings and errors are displayed. You can increase verbosity using the following options:
+
+- `--verbose`, `-v`: Enable INFO level logging (operation progress, Git/SSH commands)
+- `--debug`, `-d`: Enable DEBUG level logging (all debug information, command output, stack traces)
+
+### Log File Output
+
+Logs are automatically saved to `~/.cache/git-ssh-sync/logs/git-ssh-sync.log`. The log file contains all log levels (DEBUG and above) regardless of console output settings.
+
+You can specify a custom log file path using `--log-file`:
+
+```bash
+git-ssh-sync pull myproject --log-file /tmp/my-sync.log
+```
+
+### Usage Examples
+
+```bash
+# Default (warnings and errors only)
+git-ssh-sync pull myproject
+
+# Verbose output (operation progress)
+git-ssh-sync pull myproject --verbose
+
+# Debug output (all details including command execution)
+git-ssh-sync pull myproject --debug
+
+# Verbose with custom log file
+git-ssh-sync push myproject --verbose --log-file /tmp/sync.log
+
+# Debug output for diagnostics
+git-ssh-sync doctor myproject --debug
+```
+
+### Log Content
+
+- **INFO**: Operation progress (pull/push/checkout), success messages
+- **DEBUG**: Git/SSH commands executed, return codes, stdout/stderr, working directories
+- **WARNING**: Recoverable issues (LFS, submodules detected)
+- **ERROR**: Failures, execution errors
+
+Logs are particularly useful when troubleshooting SSH connection issues, Git command failures, or understanding the synchronization flow.
 
 ## For Developers
 
