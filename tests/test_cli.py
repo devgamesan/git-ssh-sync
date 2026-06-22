@@ -4,6 +4,7 @@ from git_ssh_sync import cli
 from git_ssh_sync.cli import app
 from git_ssh_sync.clone import CloneError
 from git_ssh_sync.config import default_config_path, get_project, load_config
+from git_ssh_sync.dev import DevCommandError
 from git_ssh_sync.doctor import DoctorError
 from git_ssh_sync.status import StatusError
 from git_ssh_sync.sync import SyncError
@@ -22,6 +23,7 @@ def test_top_level_help() -> None:
         "init",
         "clone",
         "status",
+        "dev",
         "branch",
         "pull",
         "push",
@@ -37,6 +39,7 @@ def test_subcommand_help() -> None:
         "init",
         "clone",
         "status",
+        "dev",
         "branch",
         "pull",
         "push",
@@ -342,6 +345,60 @@ def test_status_command_reports_status_error(monkeypatch) -> None:
 
     assert result.exit_code == 1
     assert "gateway repository does not exist" in result.output
+
+
+def test_dev_status_command_runs_dev_status_workflow(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli, "dev_status_project", lambda project: calls.append(project)
+    )
+
+    result = runner.invoke(app, ["dev", "status", "myproject"])
+
+    assert result.exit_code == 0
+    assert calls == ["myproject"]
+
+
+def test_dev_diff_command_passes_options(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "dev_diff_project",
+        lambda project, *, stat=False, cached=False: calls.append(
+            (project, stat, cached)
+        ),
+    )
+
+    result = runner.invoke(app, ["dev", "diff", "myproject", "--stat", "--cached"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", True, True)]
+
+
+def test_dev_log_command_passes_max_count(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "dev_log_project",
+        lambda project, *, max_count=10: calls.append((project, max_count)),
+    )
+
+    result = runner.invoke(app, ["dev", "log", "myproject", "--max-count", "3"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", 3)]
+
+
+def test_dev_command_reports_dev_error(monkeypatch) -> None:
+    def fail(project: str) -> None:
+        raise DevCommandError("Development work repository is in detached HEAD state.")
+
+    monkeypatch.setattr(cli, "dev_status_project", fail)
+
+    result = runner.invoke(app, ["dev", "status", "myproject"])
+
+    assert result.exit_code == 1
+    assert "detached HEAD" in result.output
 
 
 def test_branch_command_runs_branch_workflow(monkeypatch) -> None:
