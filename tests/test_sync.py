@@ -189,6 +189,49 @@ def test_pull_project_stops_when_branch_diverged(
     assert "git rebase gitsync/main" in message
 
 
+def test_pull_project_dry_run_prints_plan_without_mutating_refs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+    calls: list[tuple[str, object]] = []
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+
+    def fake_run_git(args, *, cwd=None, check=True, **kwargs):
+        calls.append(("run-git", tuple(args), cwd, check))
+        return _result(("git", *args))
+
+    def fail_push(*args, **kwargs):
+        raise AssertionError("dry-run must not push")
+
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
+        calls.append(("remote-git", tuple(args), check))
+        outputs = {
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
+            ("branch", "--show-current"): "main\n",
+        }
+        return _result(("ssh", host), outputs.get(tuple(args), ""))
+
+    monkeypatch.setattr(sync.git, "run_git", fake_run_git)
+    monkeypatch.setattr(sync.git, "push", fail_push)
+    monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
+
+    sync.pull_project("myproject", dry_run=True)
+
+    output = capsys.readouterr().out
+    assert "Mode: dry-run" in output
+    assert "Planned operations:" in output
+    assert "merge --ff-only gitsync/main" in output
+    assert ("run-git", ("fetch", "--dry-run", "origin"), local_path, True) in calls
+    assert not any(
+        call[0] == "remote-git" and tuple(call[1])[0] in {"fetch", "merge"}
+        for call in calls
+    )
+
+
 def test_checkout_project_stops_when_gitsync_remote_does_not_match_config(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -404,6 +447,54 @@ def test_checkout_project_creates_branch_from_base(
     ]
 
 
+def test_checkout_project_dry_run_prints_plan_without_mutating_refs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+    calls: list[tuple[str, object]] = []
+    origin_refs = {"develop", "feature/foo"}
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+
+    def fake_run_git(args, *, cwd=None, check=True, **kwargs):
+        calls.append(("run-git", tuple(args), cwd, check))
+        if tuple(args[:3]) == ("show-ref", "--verify", "--quiet"):
+            branch = str(args[3]).removeprefix("refs/remotes/origin/")
+            return _result(("git", *args), returncode=0 if branch in origin_refs else 1)
+        return _result(("git", *args))
+
+    def fail_push(*args, **kwargs):
+        raise AssertionError("dry-run must not push")
+
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
+        calls.append(("remote-git", tuple(args), check))
+        outputs = {
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
+            ("status", "--porcelain"): "",
+        }
+        if tuple(args) == ("show-ref", "--verify", "--quiet", "refs/heads/feature/foo"):
+            return _result(("ssh", host), returncode=1)
+        return _result(("ssh", host), outputs.get(tuple(args), ""))
+
+    monkeypatch.setattr(sync.git, "run_git", fake_run_git)
+    monkeypatch.setattr(sync.git, "push", fail_push)
+    monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
+
+    sync.checkout_project("myproject", "feature/foo", dry_run=True)
+
+    output = capsys.readouterr().out
+    assert "Mode: dry-run" in output
+    assert "create and track development branch feature/foo" in output
+    assert ("run-git", ("fetch", "--dry-run", "origin"), local_path, True) in calls
+    assert not any(
+        call[0] == "remote-git" and tuple(call[1])[0] in {"fetch", "switch"}
+        for call in calls
+    )
+
+
 def test_checkout_project_stops_when_base_branch_is_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -617,6 +708,49 @@ def test_push_project_stops_when_origin_and_dev_diverged(
     assert "git-ssh-sync pull myproject" in message
     assert "branch: main" in message
     assert "commit: abc1234" in message
+
+
+def test_push_project_dry_run_prints_plan_without_mutating_refs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+    calls: list[tuple[str, object]] = []
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+
+    def fake_run_git(args, *, cwd=None, check=True, **kwargs):
+        calls.append(("run-git", tuple(args), cwd, check))
+        return _result(("git", *args))
+
+    def fail_fetch(*args, **kwargs):
+        raise AssertionError("dry-run must not fetch refs")
+
+    def fail_push(*args, **kwargs):
+        raise AssertionError("dry-run must not push")
+
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
+        calls.append(("remote-git", tuple(args), check))
+        outputs = {
+            ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
+            ("branch", "--show-current"): "main\n",
+        }
+        return _result(("ssh", host), outputs.get(tuple(args), ""))
+
+    monkeypatch.setattr(sync.git, "fetch", fail_fetch)
+    monkeypatch.setattr(sync.git, "run_git", fake_run_git)
+    monkeypatch.setattr(sync.git, "push", fail_push)
+    monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
+
+    sync.push_project("myproject", dry_run=True)
+
+    output = capsys.readouterr().out
+    assert "Mode: dry-run" in output
+    assert "push dev/main to origin/main" in output
+    assert ("run-git", ("fetch", "--dry-run", "origin"), local_path, True) in calls
+    assert not any(call[0] == "push" for call in calls)
 
 
 def test_push_project_stops_when_development_head_is_detached(

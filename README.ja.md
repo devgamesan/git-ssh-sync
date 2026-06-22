@@ -191,6 +191,13 @@ git-ssh-sync push myproject
 
 `pull` と `push` は、開発環境 work repo のカレントブランチを対象にします。別のブランチを同期したい場合は、先に `checkout` で work repo のブランチを切り替えます。
 
+ref を変更する前に実行予定の操作と preflight check を確認するには `--dry-run` を使います。
+
+```bash
+git-ssh-sync pull myproject --dry-run
+git-ssh-sync push myproject --dry-run
+```
+
 ## ブランチ切り替え workflow
 
 既存ブランチへ切り替える場合は、ローカルマシンから `checkout` を実行します。
@@ -205,6 +212,13 @@ git-ssh-sync checkout myproject feature/foo
 
 ```bash
 git-ssh-sync checkout myproject -b feature/foo --base develop
+```
+
+origin、cache、work repo の ref を変更せずにブランチ切り替えやブランチ作成を確認するには、`checkout` にも `--dry-run` を付けます。
+
+```bash
+git-ssh-sync checkout myproject feature/foo --dry-run
+git-ssh-sync checkout myproject -b feature/foo --base develop --dry-run
 ```
 
 開発環境:

@@ -191,6 +191,13 @@ git-ssh-sync push myproject
 
 `pull` and `push` target the current branch of the work repository on the development environment. To synchronize a different branch, switch the work repository branch with `checkout` first.
 
+Use `--dry-run` to inspect the planned operations and preflight checks before changing refs:
+
+```bash
+git-ssh-sync pull myproject --dry-run
+git-ssh-sync push myproject --dry-run
+```
+
 ## Branch Switching Workflow
 
 To switch to an existing branch, execute `checkout` from the local machine.
@@ -205,6 +212,13 @@ To create a new branch, use `-b`. Use `--base` together to explicitly specify th
 
 ```bash
 git-ssh-sync checkout myproject -b feature/foo --base develop
+```
+
+To preview a branch switch or branch creation without changing origin, cache, or work repo refs:
+
+```bash
+git-ssh-sync checkout myproject feature/foo --dry-run
+git-ssh-sync checkout myproject -b feature/foo --base develop --dry-run
 ```
 
 Development environment:

@@ -353,29 +353,43 @@ def branch_command(
 @app.command("pull")
 def pull_command(
     project: Annotated[str, typer.Argument(help="Project name to pull.")],
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Show the planned pull without changing refs."),
+    ] = False,
 ) -> None:
     """Fetch origin changes and fast-forward the current development branch."""
     try:
-        pull_project(project)
+        pull_project(project, dry_run=dry_run)
     except (ConfigError, SyncError, CommandExecutionError) as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(code=1) from error
 
-    console.print(f"Project '{project}' pulled.")
+    if dry_run:
+        console.print(f"Project '{project}' pull dry-run completed.")
+    else:
+        console.print(f"Project '{project}' pulled.")
 
 
 @app.command("push")
 def push_command(
     project: Annotated[str, typer.Argument(help="Project name to push.")],
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Show the planned push without changing refs."),
+    ] = False,
 ) -> None:
     """Push current development branch commits to origin when it is safe to do so."""
     try:
-        push_project(project)
+        push_project(project, dry_run=dry_run)
     except (ConfigError, SyncError, CommandExecutionError) as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(code=1) from error
 
-    console.print(f"Project '{project}' pushed.")
+    if dry_run:
+        console.print(f"Project '{project}' push dry-run completed.")
+    else:
+        console.print(f"Project '{project}' pushed.")
 
 
 @app.command("checkout")
@@ -397,6 +411,13 @@ def checkout_command(
         str | None,
         typer.Option("--base", help="Create the branch from this branch."),
     ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Show the planned checkout without changing refs or branches.",
+        ),
+    ] = False,
 ) -> None:
     """Switch the development repository to a branch."""
     target_branch = create_branch or branch
@@ -412,12 +433,18 @@ def checkout_command(
             target_branch,
             create=create_branch is not None,
             base_branch=base_branch,
+            dry_run=dry_run,
         )
     except (ConfigError, SyncError, CommandExecutionError) as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(code=1) from error
 
-    console.print(f"Project '{project}' checked out {target_branch}.")
+    if dry_run:
+        console.print(
+            f"Project '{project}' checkout dry-run completed for {target_branch}."
+        )
+    else:
+        console.print(f"Project '{project}' checked out {target_branch}.")
 
 
 @app.command("doctor")
