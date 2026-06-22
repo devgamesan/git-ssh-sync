@@ -22,6 +22,12 @@ from git_ssh_sync.config import (
     update_project,
 )
 from git_ssh_sync.console import console
+from git_ssh_sync.dev import (
+    DevCommandError,
+    dev_diff_project,
+    dev_log_project,
+    dev_status_project,
+)
 from git_ssh_sync.doctor import DoctorError, doctor_project
 from git_ssh_sync.errors import CommandExecutionError
 from git_ssh_sync.logging_config import setup_logging
@@ -34,7 +40,9 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 config_app = typer.Typer(help="Manage registered project configuration.")
+dev_app = typer.Typer(help="Inspect the development work repository.")
 app.add_typer(config_app, name="config")
+app.add_typer(dev_app, name="dev")
 
 
 def _version_callback(value: bool) -> None:
@@ -420,6 +428,58 @@ def doctor_command(
     try:
         doctor_project(project)
     except (ConfigError, DoctorError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+
+@dev_app.command("status")
+def dev_status_command(
+    project: Annotated[str, typer.Argument(help="Project name to inspect.")],
+) -> None:
+    """Show `git status --short --branch` from the development work repo."""
+    try:
+        dev_status_project(project)
+    except (ConfigError, DevCommandError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+
+@dev_app.command("diff")
+def dev_diff_command(
+    project: Annotated[str, typer.Argument(help="Project name to inspect.")],
+    stat: Annotated[
+        bool,
+        typer.Option("--stat", help="Show diffstat instead of the full diff."),
+    ] = False,
+    cached: Annotated[
+        bool,
+        typer.Option("--cached", help="Show staged changes."),
+    ] = False,
+) -> None:
+    """Show uncommitted diff from the development work repo."""
+    try:
+        dev_diff_project(project, stat=stat, cached=cached)
+    except (ConfigError, DevCommandError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+
+@dev_app.command("log")
+def dev_log_command(
+    project: Annotated[str, typer.Argument(help="Project name to inspect.")],
+    max_count: Annotated[
+        int,
+        typer.Option(
+            "--max-count",
+            min=1,
+            help="Maximum number of commits to show.",
+        ),
+    ] = 10,
+) -> None:
+    """Show recent one-line log entries from the development work repo."""
+    try:
+        dev_log_project(project, max_count=max_count)
+    except (ConfigError, DevCommandError, CommandExecutionError) as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(code=1) from error
 

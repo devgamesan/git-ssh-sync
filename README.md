@@ -240,6 +240,20 @@ To list existence status and ahead/behind for each branch, use `branch`.
 git-ssh-sync branch myproject
 ```
 
+To inspect the development work repo directly from the local machine, use the
+read-only `dev` commands.
+
+```bash
+git-ssh-sync dev status myproject
+git-ssh-sync dev diff myproject
+git-ssh-sync dev diff myproject --stat
+git-ssh-sync dev log myproject --max-count 5
+```
+
+These commands run `git status`, `git diff`, or `git log` on the development
+work repo over SSH. They do not update origin, the local gateway repo, the
+development cache repo, or the development work repo refs.
+
 ## Operational Rules
 
 When using `git-ssh-sync`, following these rules makes it easier to understand the state:
@@ -285,6 +299,12 @@ git-ssh-sync status myproject
 
 # Check branch status
 git-ssh-sync branch myproject
+
+# Inspect development work repo status
+git-ssh-sync dev status myproject
+
+# Inspect development work repo diff
+git-ssh-sync dev diff myproject --stat
 
 # Reflect changes from origin to development environment
 git-ssh-sync pull myproject

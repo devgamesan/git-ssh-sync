@@ -240,6 +240,20 @@ git-ssh-sync status myproject
 git-ssh-sync branch myproject
 ```
 
+ローカルマシンから開発環境 work repo の状態を直接確認するには、参照専用の
+`dev` コマンドを使います。
+
+```bash
+git-ssh-sync dev status myproject
+git-ssh-sync dev diff myproject
+git-ssh-sync dev diff myproject --stat
+git-ssh-sync dev log myproject --max-count 5
+```
+
+これらのコマンドは SSH 越しに開発環境 work repo で `git status`、
+`git diff`、`git log` を実行します。origin、ローカル gateway repo、
+開発環境 cache repo、開発環境 work repo の ref は更新しません。
+
 ## 運用ルール
 
 `git-ssh-sync` を使う時は、次のルールを守ると状態を把握しやすくなります。
@@ -285,6 +299,12 @@ git-ssh-sync status myproject
 
 # ブランチ状態を確認
 git-ssh-sync branch myproject
+
+# 開発環境 work repo の状態を確認
+git-ssh-sync dev status myproject
+
+# 開発環境 work repo の差分を確認
+git-ssh-sync dev diff myproject --stat
 
 # origin の変更を開発環境へ反映
 git-ssh-sync pull myproject
