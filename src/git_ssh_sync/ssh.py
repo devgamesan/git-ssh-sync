@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shlex
+from base64 import b64encode
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Literal
@@ -86,9 +87,10 @@ def run_powershell(
     check: bool = True,
 ) -> CommandResult:
     """Run a PowerShell script on an SSH host."""
+    encoded_script = b64encode(script.encode("utf-16le")).decode("ascii")
     remote_command = (
-        "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "
-        f"{_powershell_quote(script)}"
+        "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass "
+        f"-EncodedCommand {encoded_script}"
     )
     return _run_ssh_command_string(
         host,

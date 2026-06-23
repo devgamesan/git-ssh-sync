@@ -280,6 +280,65 @@ def test_init_command_creates_project_config(monkeypatch, tmp_path) -> None:
     assert project.dev.host == "devserver"
     assert project.dev.user == "user"
     assert project.dev.os == "windows"
+    assert project.dev.work_path == "C:\\Users\\user\\work\\myproject"
+    assert (
+        project.dev.cache_path
+        == "C:\\Users\\user\\.git-ssh-sync\\cache\\myproject.git"
+    )
+
+
+def test_init_command_rejects_unquoted_windows_path(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = runner.invoke(
+        app,
+        [
+            "init",
+            "myproject",
+            "--origin",
+            "git@github.com:example/myproject.git",
+            "--dev-host",
+            "devserver",
+            "--dev-user",
+            "user",
+            "--dev-os",
+            "windows",
+            "--dev-path",
+            "C:Usersuserworkmyproject",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "separators were removed by the shell" in result.output
+
+
+def test_init_command_accepts_windows_path_with_forward_slashes(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = runner.invoke(
+        app,
+        [
+            "init",
+            "win_project",
+            "--origin",
+            "https://github.com/devgamesan/test_project.git",
+            "--dev-host",
+            "windows",
+            "--dev-user",
+            "gmsn1",
+            "--dev-os",
+            "windows",
+            "--dev-path",
+            "C:/Users/gmsn1/work",
+            "--force",
+        ],
+    )
+
+    assert result.exit_code == 0
+    project = get_project(load_config(default_config_path()), "win_project")
+    assert project.dev.work_path == "C:/Users/gmsn1/work"
 
 
 def test_init_command_requires_force_for_existing_project(

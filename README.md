@@ -91,8 +91,19 @@ git-ssh-sync init myproject `
   --dev-host devserver `
   --dev-user user `
   --dev-os windows `
-  --dev-path C:\Users\user\work\myproject
+  --dev-path 'C:\Users\user\work\myproject'
 ```
+
+When running the command from macOS or Linux shells such as `zsh` or `bash`,
+quote Windows paths that contain backslashes. Otherwise the shell can remove the
+backslashes before `git-ssh-sync` receives the argument. You can also use forward
+slashes, for example `C:/Users/user/work/myproject`.
+
+When `--dev-os windows` is used, the default cache path is
+`C:\Users\<dev-user>\.git-ssh-sync\cache\<project>.git`. `clone` stops if either
+the configured work path or cache path already exists on the development
+environment, so remove stale directories or use the attach/recover workflow for
+existing repositories.
 
 For `--origin`, specify a remote URL that can be used with `git clone` or `git fetch`. Main formats are:
 
