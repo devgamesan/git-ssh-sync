@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import shlex
+import sys
+from base64 import b64encode
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Literal
@@ -86,9 +88,10 @@ def run_powershell(
     check: bool = True,
 ) -> CommandResult:
     """Run a PowerShell script on an SSH host."""
+    encoded_script = b64encode(script.encode("utf-16le")).decode("ascii")
     remote_command = (
-        "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "
-        f"{_powershell_quote(script)}"
+        "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass "
+        f"-EncodedCommand {encoded_script}"
     )
     return _run_ssh_command_string(
         host,
@@ -183,13 +186,29 @@ def run_remote_git(
 
 def remote_git_url(*, host: str, user: str, repo_path: str, remote_os: RemoteOS) -> str:
     """Build an SSH Git URL for a remote repository path."""
-    normalized_path = (
-        repo_path.replace("\\", "/") if remote_os == "windows" else repo_path
-    )
+    if remote_os == "windows":
+        normalized_path = repo_path.replace("\\", "/")
+        return f"{user}@{host}:{normalized_path}"
+
+    normalized_path = repo_path
     quoted_path = quote(normalized_path, safe="/~:")
-    if remote_os == "windows" and not quoted_path.startswith("/"):
-        quoted_path = f"/{quoted_path}"
     return f"ssh://{user}@{host}{quoted_path}"
+
+
+def git_ssh_environment(
+    remote_os: RemoteOS, env: Mapping[str, str] | None = None
+) -> Mapping[str, str] | None:
+    """Return environment overrides for local Git SSH transport."""
+    if remote_os != "windows":
+        return env
+
+    git_env = dict(env or {})
+    if existing_command := git_env.get("GIT_SSH_COMMAND"):
+        git_env["GIT_SSH_SYNC_BASE_SSH_COMMAND"] = existing_command
+    git_env["GIT_SSH_COMMAND"] = (
+        f"{shlex.quote(sys.executable)} -m git_ssh_sync.windows_git_ssh"
+    )
+    return git_env
 
 
 def remote_parent(path: str, remote_os: RemoteOS) -> str:
@@ -235,6 +254,23 @@ def remote_mkdir(
         )
         return run_powershell(host, script, user=user)
     return run_ssh(host, ["mkdir", "-p", path], user=user)
+
+
+def remote_remove(
+    host: str,
+    path: str,
+    *,
+    user: str,
+    remote_os: RemoteOS,
+) -> CommandResult:
+    """Remove a remote path recursively if it exists."""
+    if remote_os == "windows":
+        script = (
+            "Remove-Item -LiteralPath "
+            f"{_powershell_quote(path)} -Recurse -Force -ErrorAction SilentlyContinue"
+        )
+        return run_powershell(host, script, user=user, check=False)
+    return run_ssh(host, ["rm", "-rf", "--", path], user=user, check=False)
 
 
 def remote_command_exists(

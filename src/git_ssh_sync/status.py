@@ -134,7 +134,10 @@ def inspect_project_status(project: str, project_config: ProjectConfig) -> Statu
         host=dev_host, user=dev_user, repo_path=dev_work_path, remote_os=dev_os
     )
     git.fetch(
-        dev_repo_url, [f"refs/heads/{branch}:refs/remotes/dev/{branch}"], cwd=local_path
+        dev_repo_url,
+        [f"refs/heads/{branch}:refs/remotes/dev/{branch}"],
+        cwd=local_path,
+        env=ssh.git_ssh_environment(dev_os),
     )
 
     origin_ref = f"origin/{branch}"

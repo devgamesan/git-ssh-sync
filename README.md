@@ -91,8 +91,19 @@ git-ssh-sync init myproject `
   --dev-host devserver `
   --dev-user user `
   --dev-os windows `
-  --dev-path C:\Users\user\work\myproject
+  --dev-path 'C:\Users\user\work\myproject'
 ```
+
+When running the command from macOS or Linux shells such as `zsh` or `bash`,
+quote Windows paths that contain backslashes. Otherwise the shell can remove the
+backslashes before `git-ssh-sync` receives the argument. You can also use forward
+slashes, for example `C:/Users/user/work/myproject`.
+
+When `--dev-os windows` is used, the default cache path is
+`C:\Users\<dev-user>\.git-ssh-sync\cache\<project>.git`. `clone` stops if either
+the configured work path or cache path already exists on the development
+environment, so remove stale directories or use the attach/recover workflow for
+existing repositories.
 
 For `--origin`, specify a remote URL that can be used with `git clone` or `git fetch`. Main formats are:
 
@@ -116,6 +127,59 @@ git-ssh-sync init myproject \
   --dev-path /home/user/work/myproject \
   --force
 ```
+
+### Configuration file
+
+Project settings are saved as YAML. The default path depends on the local
+machine where `git-ssh-sync` runs:
+
+```text
+macOS / Linux: ~/.config/git-ssh-sync/config.yaml
+Windows:       %APPDATA%\git-ssh-sync\config.yaml
+```
+
+A generated configuration looks like this:
+
+```yaml
+version: 1
+
+projects:
+  myproject:
+    origin: git@github.com:example/myproject.git
+
+    local:
+      repo_path: ~/.git-ssh-sync/repos/myproject
+
+    dev:
+      host: devserver
+      user: user
+      os: posix
+      work_path: /home/user/work/myproject
+      cache_path: /home/user/.git-ssh-sync/cache/myproject.git
+
+    options:
+      sync_tags: true
+      lfs: false
+      submodules: false
+      ff_only: true
+```
+
+Main fields:
+
+- `origin`: GitHub / GitLab repository URL used by the local gateway repository
+- `local.repo_path`: Local gateway repository path managed by `git-ssh-sync`
+- `dev.host`, `dev.user`, `dev.os`: SSH connection target and remote OS
+- `dev.work_path`: Work repository path on the development environment
+- `dev.cache_path`: Bare cache repository path on the development environment
+- `options.sync_tags`: Synchronize Git tags when pulling or pushing
+- `options.lfs`: Reserved option for Git LFS support
+- `options.submodules`: Reserved option for submodule support
+- `options.ff_only`: Keep synchronization fast-forward only
+
+In normal use, manage this file with `git-ssh-sync init` and
+`git-ssh-sync config` commands. If you edit it manually, keep the YAML
+structure unchanged and use paths that are valid on the machine or
+development environment where each field is used.
 
 You can inspect and maintain registered projects without opening the config file directly.
 
@@ -239,12 +303,78 @@ git-ssh-sync push myproject
 
 `pull` and `push` target the current branch of the work repository on the development environment. To synchronize a different branch, switch the work repository branch with `checkout` first.
 
+If you are not sure about the current state at the beginning of work, first check synchronization status from the local machine and run `pull` when needed.
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync pull myproject
+git-ssh-sync dev status myproject
+```
+
+If `dev status` shows a dirty working tree on the development environment, uncommitted changes are not synchronized. Inspect the diff on the development environment and commit the changes you want to synchronize before `push`.
+
+```bash
+git-ssh-sync dev diff myproject --stat
+```
+
+Before pushing, confirm that the development environment changes are committed, then run `status` and `push` from the local machine.
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync push myproject
+```
+
 Use `--dry-run` to inspect the planned operations and preflight checks before changing refs:
 
 ```bash
 git-ssh-sync pull myproject --dry-run
 git-ssh-sync push myproject --dry-run
 ```
+
+## Workflow When Push Stops
+
+`push` executes only when the branch on the origin side is an ancestor of the branch on the development environment side. It stops when origin has commits that have not been pulled yet, or when origin and the development environment have diverged.
+
+In that case, run `pull` from the local machine to deliver origin changes to the development environment.
+
+```bash
+git-ssh-sync pull myproject
+```
+
+If `pull` cannot fast-forward, `git-ssh-sync` does not automatically merge or rebase. Resolve it with normal Git operations on the development environment, using either merge or rebase, then run `push` again from the local machine.
+
+Example using merge:
+
+```bash
+cd ~/work/myproject
+git fetch gitsync
+git merge gitsync/main
+# If there are conflicts, edit the files
+git status
+git add <resolved-files>
+git commit
+```
+
+Example using rebase:
+
+```bash
+cd ~/work/myproject
+git fetch gitsync
+git rebase gitsync/main
+# If there are conflicts, edit the files
+git status
+git add <resolved-files>
+git rebase --continue
+```
+
+If the branch is not `main`, replace `gitsync/main` with the target branch. After merge or rebase completes, check status from the local machine and push.
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync push myproject
+```
+
+After rebase, only rewrite commits that exist only on the development environment and have not been pushed to origin yet. If you want to avoid rewriting history on a shared branch, use merge.
 
 ## Branch Switching Workflow
 
@@ -332,7 +462,7 @@ Uncommitted changes are not synchronized. If there are uncommitted changes in th
 
 `push` executes only when the branch on the origin side is an ancestor of the branch on the development environment side. If there are unobtained commits on origin, it stops.
 
-When diverged, automatic resolution is not performed. Execute `pull` on the local machine, follow the displayed instructions to merge or rebase in the development environment, then `push` again.
+When diverged, automatic resolution is not performed. Follow "Workflow When Push Stops", merge or rebase in the development environment, then `push` again.
 
 ## Common Commands
 

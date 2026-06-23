@@ -57,6 +57,7 @@ def _run_command(
         env=_merged_env(env),
         capture_output=True,
         text=True,
+        errors="replace",
         check=False,
     )
 

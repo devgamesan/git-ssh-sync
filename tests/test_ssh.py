@@ -1,11 +1,22 @@
 from pathlib import Path
+import sys
 from subprocess import CompletedProcess
+from base64 import b64decode
 
 import pytest
 
 from git_ssh_sync import git
 from git_ssh_sync import ssh
 from git_ssh_sync.errors import CommandExecutionError
+
+
+def _decoded_powershell_script(command: list[str]) -> str:
+    remote_command = command[2]
+    assert (
+        "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "
+    ) in remote_command
+    encoded_script = remote_command.rsplit(" ", 1)[1]
+    return b64decode(encoded_script).decode("utf-16le")
 
 
 def test_run_ssh_builds_target_and_quotes_remote_command(
@@ -72,15 +83,10 @@ def test_run_remote_git_uses_powershell_for_windows_remote(
         remote_os="windows",
     )
 
-    assert calls == [
-        [
-            "ssh",
-            "alice@devserver",
-            "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass "
-            "-Command '& ''git'' -C ''C:\\Users\\alice\\work repo'' "
-            "''status'' ''--porcelain'''",
-        ]
-    ]
+    assert calls[0][:2] == ["ssh", "alice@devserver"]
+    assert _decoded_powershell_script(calls[0]) == (
+        "& 'git' -C 'C:\\Users\\alice\\work repo' 'status' '--porcelain'"
+    )
 
 
 def test_remote_git_url_supports_windows_paths() -> None:
@@ -91,8 +97,26 @@ def test_remote_git_url_supports_windows_paths() -> None:
             repo_path="C:\\Users\\alice\\cache repo\\myproject.git",
             remote_os="windows",
         )
-        == "ssh://alice@devserver/C:/Users/alice/cache%20repo/myproject.git"
+        == "alice@devserver:C:/Users/alice/cache repo/myproject.git"
     )
+
+
+def test_git_ssh_environment_wraps_windows_git_transport() -> None:
+    env = ssh.git_ssh_environment(
+        "windows", {"GIT_SSH_COMMAND": "ssh -i key", "OTHER": "value"}
+    )
+
+    assert env == {
+        "GIT_SSH_COMMAND": f"{sys.executable} -m git_ssh_sync.windows_git_ssh",
+        "GIT_SSH_SYNC_BASE_SSH_COMMAND": "ssh -i key",
+        "OTHER": "value",
+    }
+
+
+def test_git_ssh_environment_leaves_posix_env_unchanged() -> None:
+    env = {"GIT_SSH_COMMAND": "ssh -i key"}
+
+    assert ssh.git_ssh_environment("posix", env) is env
 
 
 def test_remote_path_helpers_use_powershell_for_windows(
@@ -115,16 +139,59 @@ def test_remote_path_helpers_use_powershell_for_windows(
     )
 
     assert result.returncode == 1
-    assert calls == [
-        [
-            "ssh",
-            "alice@devserver",
-            "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass "
-            "-Command 'if (Test-Path -LiteralPath "
-            "''C:\\Users\\alice\\work repo'' -PathType Container) "
-            "{ exit 0 } else { exit 1 }'",
-        ]
+    assert calls[0][:2] == ["ssh", "alice@devserver"]
+    assert _decoded_powershell_script(calls[0]) == (
+        "if (Test-Path -LiteralPath 'C:\\Users\\alice\\work repo' "
+        "-PathType Container) { exit 0 } else { exit 1 }"
+    )
+
+
+def test_remote_remove_uses_powershell_for_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(git.subprocess, "run", fake_run)
+
+    result = ssh.remote_remove(
+        "devserver",
+        "C:\\Users\\alice\\work repo",
+        user="alice",
+        remote_os="windows",
+    )
+
+    assert result.returncode == 0
+    assert calls[0][0][:2] == ["ssh", "alice@devserver"]
+    assert calls[0][1]["check"] is False
+    assert _decoded_powershell_script(calls[0][0]) == (
+        "Remove-Item -LiteralPath 'C:\\Users\\alice\\work repo' "
+        "-Recurse -Force -ErrorAction SilentlyContinue"
+    )
+
+
+def test_remote_remove_uses_rm_for_posix(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(git.subprocess, "run", fake_run)
+
+    ssh.remote_remove(
+        "devserver", "/home/alice/work repo", user="alice", remote_os="posix"
+    )
+
+    assert calls[0][0] == [
+        "ssh",
+        "alice@devserver",
+        "rm -rf -- '/home/alice/work repo'",
     ]
+    assert calls[0][1]["check"] is False
 
 
 def test_run_ssh_raises_contextual_error_on_failure(

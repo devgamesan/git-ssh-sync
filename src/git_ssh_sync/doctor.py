@@ -621,6 +621,7 @@ def _check_repository(
             cache_repo_url,
             [f"refs/heads/{branch}:refs/remotes/dev-cache/{branch}"],
             cwd=local_path,
+            env=ssh.git_ssh_environment(project_config.dev.os),
         )
     except CommandExecutionError as error:
         checks.append(
@@ -647,6 +648,7 @@ def _check_repository(
             dev_repo_url,
             [f"refs/heads/{branch}:refs/remotes/dev/{branch}"],
             cwd=local_path,
+            env=ssh.git_ssh_environment(project_config.dev.os),
         )
     except CommandExecutionError as error:
         checks.append(
