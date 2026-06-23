@@ -111,6 +111,43 @@ def test_build_project_config_rejects_windows_path_with_stripped_separators() ->
     assert "C:/Users/user/work/repo" in message
 
 
+def test_init_project_force_replaces_existing_config_with_stripped_windows_path(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+version: 1
+projects:
+  win_project:
+    origin: https://github.com/devgamesan/old.git
+    local:
+      repo_path: ~/.git-ssh-sync/repos/win_project
+    dev:
+      host: windows
+      user: gmsn1
+      os: windows
+      work_path: C:Usersgmsn1work
+      cache_path: C:Usersgmsn1cachewin_project.git
+""",
+        encoding="utf-8",
+    )
+
+    project = init_project(
+        "win_project",
+        origin="https://github.com/devgamesan/test_project.git",
+        dev_host="windows",
+        dev_user="gmsn1",
+        dev_os="windows",
+        dev_work_path="C:/Users/gmsn1/work",
+        force=True,
+        config_path=config_path,
+    )
+
+    assert project.origin == "https://github.com/devgamesan/test_project.git"
+    assert project.dev.work_path == "C:/Users/gmsn1/work"
+
+
 def test_register_project_requires_force_for_existing_project(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     first = init_project(

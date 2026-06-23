@@ -309,7 +309,9 @@ def test_init_command_rejects_unquoted_windows_path(monkeypatch, tmp_path) -> No
     )
 
     assert result.exit_code == 1
-    assert "separators were removed by the shell" in result.output
+    assert "separators were removed by the shell" in " ".join(
+        result.output.split()
+    )
 
 
 def test_init_command_accepts_windows_path_with_forward_slashes(
@@ -338,6 +340,54 @@ def test_init_command_accepts_windows_path_with_forward_slashes(
 
     assert result.exit_code == 0
     project = get_project(load_config(default_config_path()), "win_project")
+    assert project.dev.work_path == "C:/Users/gmsn1/work"
+
+
+def test_init_command_force_replaces_existing_config_with_stripped_windows_path(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    default_config_path().parent.mkdir(parents=True)
+    default_config_path().write_text(
+        """
+version: 1
+projects:
+  win_project:
+    origin: https://github.com/devgamesan/old.git
+    local:
+      repo_path: ~/.git-ssh-sync/repos/win_project
+    dev:
+      host: windows
+      user: gmsn1
+      os: windows
+      work_path: C:Usersgmsn1work
+      cache_path: C:Usersgmsn1cachewin_project.git
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "init",
+            "win_project",
+            "--origin",
+            "https://github.com/devgamesan/test_project.git",
+            "--dev-host",
+            "windows",
+            "--dev-user",
+            "gmsn1",
+            "--dev-os",
+            "windows",
+            "--dev-path",
+            "C:/Users/gmsn1/work",
+            "--force",
+        ],
+    )
+
+    assert result.exit_code == 0
+    project = get_project(load_config(default_config_path()), "win_project")
+    assert project.origin == "https://github.com/devgamesan/test_project.git"
     assert project.dev.work_path == "C:/Users/gmsn1/work"
 
 
