@@ -185,12 +185,12 @@ def run_remote_git(
 
 def remote_git_url(*, host: str, user: str, repo_path: str, remote_os: RemoteOS) -> str:
     """Build an SSH Git URL for a remote repository path."""
-    normalized_path = (
-        repo_path.replace("\\", "/") if remote_os == "windows" else repo_path
-    )
+    if remote_os == "windows":
+        normalized_path = repo_path.replace("\\", "/")
+        return f"{user}@{host}:{normalized_path}"
+
+    normalized_path = repo_path
     quoted_path = quote(normalized_path, safe="/~:")
-    if remote_os == "windows" and not quoted_path.startswith("/"):
-        quoted_path = f"/{quoted_path}"
     return f"ssh://{user}@{host}{quoted_path}"
 
 

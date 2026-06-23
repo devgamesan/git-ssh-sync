@@ -223,6 +223,88 @@ def test_clone_project_skips_tags_when_disabled(
     assert pushes == [("refs/remotes/origin/main:refs/heads/main",)]
 
 
+def test_clone_project_pushes_to_windows_cache_with_scp_like_url(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    project = build_project_config(
+        "myproject",
+        origin="git@github.com:example/myproject.git",
+        dev_host="devserver",
+        dev_user="user",
+        dev_os="windows",
+        dev_work_path="C:\\Users\\user\\work\\myproject",
+        local_repo_path=str(tmp_path / "gateway" / "myproject"),
+        dev_cache_path="C:\\Users\\user\\cache repo\\myproject.git",
+    )
+    monkeypatch.setattr(
+        clone, "load_config", lambda: AppConfig(projects={"myproject": project})
+    )
+    pushes: list[tuple[str, tuple[str, ...]]] = []
+
+    monkeypatch.setattr(
+        clone.git,
+        "run_git",
+        lambda args, **kwargs: CommandResult(
+            "local",
+            ("git", *args),
+            0,
+            "main\n" if args == ["branch", "--show-current"] else "",
+            "",
+            kwargs.get("cwd"),
+        ),
+    )
+    monkeypatch.setattr(
+        clone.git,
+        "fetch",
+        lambda remote="origin", refspecs=(), **kwargs: CommandResult(
+            "local", ("git", "fetch", remote, *refspecs), 0, "", "", kwargs.get("cwd")
+        ),
+    )
+
+    def fake_push(remote="origin", refspecs=(), **kwargs):
+        pushes.append((remote, tuple(refspecs)))
+        return CommandResult(
+            "local", ("git", "push", remote, *refspecs), 0, "", "", kwargs.get("cwd")
+        )
+
+    monkeypatch.setattr(clone.git, "push", fake_push)
+    monkeypatch.setattr(
+        clone.ssh,
+        "remote_path_exists",
+        lambda *args, **kwargs: CommandResult(
+            "ssh:user@devserver", ("ssh", "devserver"), 1, "", ""
+        ),
+    )
+    monkeypatch.setattr(
+        clone.ssh,
+        "remote_mkdir",
+        lambda *args, **kwargs: CommandResult(
+            "ssh:user@devserver", ("ssh", "devserver"), 0, "", ""
+        ),
+    )
+    monkeypatch.setattr(
+        clone.ssh,
+        "run_remote_command",
+        lambda *args, **kwargs: CommandResult(
+            "ssh:user@devserver", ("ssh", "devserver"), 0, "", ""
+        ),
+    )
+    monkeypatch.setattr(
+        clone.ssh,
+        "run_remote_git",
+        lambda *args, **kwargs: CommandResult(
+            "ssh:user@devserver", ("ssh", "devserver"), 0, "", ""
+        ),
+    )
+
+    clone.clone_project("myproject")
+
+    assert pushes[0] == (
+        "user@devserver:C:/Users/user/cache repo/myproject.git",
+        ("refs/remotes/origin/main:refs/heads/main",),
+    )
+
+
 def test_clone_project_stops_when_local_path_exists(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

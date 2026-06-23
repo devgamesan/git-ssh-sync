@@ -12,8 +12,7 @@ from git_ssh_sync.errors import CommandExecutionError
 def _decoded_powershell_script(command: list[str]) -> str:
     remote_command = command[2]
     assert (
-        "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass "
-        "-EncodedCommand "
+        "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "
     ) in remote_command
     encoded_script = remote_command.rsplit(" ", 1)[1]
     return b64decode(encoded_script).decode("utf-16le")
@@ -97,7 +96,7 @@ def test_remote_git_url_supports_windows_paths() -> None:
             repo_path="C:\\Users\\alice\\cache repo\\myproject.git",
             remote_os="windows",
         )
-        == "ssh://alice@devserver/C:/Users/alice/cache%20repo/myproject.git"
+        == "alice@devserver:C:/Users/alice/cache repo/myproject.git"
     )
 
 
