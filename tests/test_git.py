@@ -1,6 +1,7 @@
 from io import StringIO
 from pathlib import Path
 from subprocess import CompletedProcess
+import sys
 
 import pytest
 from rich.console import Console
@@ -32,6 +33,7 @@ def test_fetch_runs_git_fetch_with_cwd_and_env(
     assert calls[0][1]["env"]["GIT_SSH_COMMAND"] == "ssh -i key"
     assert calls[0][1]["capture_output"] is True
     assert calls[0][1]["text"] is True
+    assert calls[0][1]["errors"] == "replace"
     assert calls[0][1]["check"] is False
 
 
@@ -97,6 +99,21 @@ def test_run_git_can_return_nonzero_result_without_check(
 
     assert result.returncode == 1
     assert result.stderr == "no match\n"
+
+
+def test_run_command_replaces_invalid_output_bytes() -> None:
+    result = git._run_command(
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.stderr.buffer.write(b'bad: \\x83\\n')",
+        ],
+        environment="local",
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert result.stderr == "bad: \ufffd\n"
 
 
 def test_verbose_prints_command(monkeypatch: pytest.MonkeyPatch) -> None:
