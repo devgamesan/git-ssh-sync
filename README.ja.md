@@ -299,12 +299,78 @@ git-ssh-sync push myproject
 
 `pull` と `push` は、開発環境 work repo のカレントブランチを対象にします。別のブランチを同期したい場合は、先に `checkout` で work repo のブランチを切り替えます。
 
+作業開始時に状態が分からない場合は、まずローカルマシンで同期状態を確認し、必要に応じて `pull` します。
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync pull myproject
+git-ssh-sync dev status myproject
+```
+
+`dev status` で開発環境の作業ツリーが dirty な場合、未コミット変更は同期されません。開発環境で差分を確認し、同期したい変更を commit してから `push` してください。
+
+```bash
+git-ssh-sync dev diff myproject --stat
+```
+
+push 前は、開発環境で commit 済みであることを確認してから、ローカルマシンで `status` と `push` を実行します。
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync push myproject
+```
+
 ref を変更する前に実行予定の操作と preflight check を確認するには `--dry-run` を使います。
 
 ```bash
 git-ssh-sync pull myproject --dry-run
 git-ssh-sync push myproject --dry-run
 ```
+
+## push が止まった時の workflow
+
+`push` は origin 側のブランチが開発環境側のブランチの祖先である場合だけ実行します。origin に未取得のコミットがある場合や、origin と開発環境が分岐している場合は停止します。
+
+この場合は、ローカルマシンで `pull` を実行して origin の変更を開発環境へ届けます。
+
+```bash
+git-ssh-sync pull myproject
+```
+
+`pull` が fast-forward できない場合、自動 merge や自動 rebase は行いません。開発環境で通常の Git 操作として merge または rebase を行い、必要に応じてコンフリクトを解消してから、ローカルマシンで再度 `push` します。
+
+merge で解決する例:
+
+```bash
+cd ~/work/myproject
+git fetch gitsync
+git merge gitsync/main
+# コンフリクトした場合はファイルを修正する
+git status
+git add <resolved-files>
+git commit
+```
+
+rebase で解決する例:
+
+```bash
+cd ~/work/myproject
+git fetch gitsync
+git rebase gitsync/main
+# コンフリクトした場合はファイルを修正する
+git status
+git add <resolved-files>
+git rebase --continue
+```
+
+ブランチ名が `main` 以外の場合は、`gitsync/main` を対象ブランチに置き換えてください。merge または rebase が完了したら、ローカルマシンで状態を確認してから push します。
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync push myproject
+```
+
+rebase 後の履歴を書き換えた commit は、まだ origin へ push されていない開発環境側の commit だけにしてください。共有済みブランチで履歴を書き換える運用を避けたい場合は merge を選んでください。
 
 ## ブランチ切り替え workflow
 
@@ -392,7 +458,7 @@ git-ssh-sync dev log myproject --max-count 5
 
 `push` は origin 側のブランチが開発環境側のブランチの祖先である場合だけ実行します。origin に未取得のコミットがある場合は停止します。
 
-分岐した場合は自動では解決しません。ローカルマシンで `pull` を実行して表示された手順に従い、開発環境で merge または rebase を行ってから、再度 `push` してください。
+分岐した場合は自動では解決しません。「push が止まった時の workflow」に従い、開発環境で merge または rebase を行ってから、再度 `push` してください。
 
 ## よく使うコマンド
 
