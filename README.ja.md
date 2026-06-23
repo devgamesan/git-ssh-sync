@@ -91,8 +91,17 @@ git-ssh-sync init myproject `
   --dev-host devserver `
   --dev-user user `
   --dev-os windows `
-  --dev-path C:\Users\user\work\myproject
+  --dev-path 'C:\Users\user\work\myproject'
 ```
+
+macOS や Linux の `zsh` / `bash` から実行する場合、バックスラッシュを含む Windows パスは
+引用してください。引用しないと、`git-ssh-sync` に渡る前に shell が `\` を削除することが
+あります。代わりに `C:/Users/user/work/myproject` のような `/` 区切りも使えます。
+
+`--dev-os windows` を指定した場合、cache path のデフォルトは
+`C:\Users\<dev-user>\.git-ssh-sync\cache\<project>.git` です。`clone` は開発環境上に
+設定済みの work path または cache path が既に存在する場合に停止します。古いディレクトリを
+削除するか、既存リポジトリを使う場合は attach / recover のワークフローを使ってください。
 
 `--origin` には、`git clone` や `git fetch` で指定できるリモート URL を指定します。主な形式は次のとおりです。
 
