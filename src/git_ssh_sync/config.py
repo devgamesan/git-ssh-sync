@@ -15,7 +15,6 @@ from pydantic import (
     Field,
     ValidationError,
     field_validator,
-    model_validator,
 )
 
 
@@ -51,6 +50,17 @@ def _looks_like_unquoted_windows_path(value: str) -> bool:
     return bool(re.match(r"^[A-Za-z]:[^\\/]", value))
 
 
+def _validate_windows_path_input(field_name: str, value: str | None) -> None:
+    if value is None or not _looks_like_unquoted_windows_path(value):
+        return
+    raise ConfigError(
+        f"{field_name} looks like a Windows path whose separators were removed "
+        "by the shell. Quote backslash paths, for example "
+        r"'C:\Users\user\work\repo', or use forward slashes like "
+        "C:/Users/user/work/repo."
+    )
+
+
 class LocalConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -67,21 +77,6 @@ class DevConfig(BaseModel):
     os: Literal["posix", "windows"] = "posix"
     work_path: str = Field(min_length=1)
     cache_path: str = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def _validate_windows_paths(self) -> DevConfig:
-        if self.os != "windows":
-            return self
-        for field_name in ("work_path", "cache_path"):
-            value = getattr(self, field_name)
-            if _looks_like_unquoted_windows_path(value):
-                raise ValueError(
-                    f"{field_name} looks like a Windows path whose separators were "
-                    "removed by the shell. Quote backslash paths, for example "
-                    r"'C:\Users\user\work\repo', or use forward slashes like "
-                    "C:/Users/user/work/repo."
-                )
-        return self
 
 
 class OptionsConfig(BaseModel):
@@ -226,6 +221,13 @@ def update_project(
         raw["dev"]["cache_path"] = dev_cache_path
         updated = True
 
+    effective_dev_os = raw["dev"].get("os")
+    if effective_dev_os == "windows":
+        if dev_work_path is not None:
+            _validate_windows_path_input("dev.work_path", dev_work_path)
+        if dev_cache_path is not None:
+            _validate_windows_path_input("dev.cache_path", dev_cache_path)
+
     for key, value in {
         "sync_tags": sync_tags,
         "lfs": lfs,
@@ -266,6 +268,10 @@ def build_project_config(
     options: OptionsConfig | None = None,
 ) -> ProjectConfig:
     """Build and validate a project config, applying init defaults."""
+    if dev_os == "windows":
+        _validate_windows_path_input("dev.work_path", dev_work_path)
+        _validate_windows_path_input("dev.cache_path", dev_cache_path)
+
     raw: dict[str, Any] = {
         "origin": origin,
         "local": {
