@@ -303,12 +303,78 @@ git-ssh-sync push myproject
 
 `pull` and `push` target the current branch of the work repository on the development environment. To synchronize a different branch, switch the work repository branch with `checkout` first.
 
+If you are not sure about the current state at the beginning of work, first check synchronization status from the local machine and run `pull` when needed.
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync pull myproject
+git-ssh-sync dev status myproject
+```
+
+If `dev status` shows a dirty working tree on the development environment, uncommitted changes are not synchronized. Inspect the diff on the development environment and commit the changes you want to synchronize before `push`.
+
+```bash
+git-ssh-sync dev diff myproject --stat
+```
+
+Before pushing, confirm that the development environment changes are committed, then run `status` and `push` from the local machine.
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync push myproject
+```
+
 Use `--dry-run` to inspect the planned operations and preflight checks before changing refs:
 
 ```bash
 git-ssh-sync pull myproject --dry-run
 git-ssh-sync push myproject --dry-run
 ```
+
+## Workflow When Push Stops
+
+`push` executes only when the branch on the origin side is an ancestor of the branch on the development environment side. It stops when origin has commits that have not been pulled yet, or when origin and the development environment have diverged.
+
+In that case, run `pull` from the local machine to deliver origin changes to the development environment.
+
+```bash
+git-ssh-sync pull myproject
+```
+
+If `pull` cannot fast-forward, `git-ssh-sync` does not automatically merge or rebase. Resolve it with normal Git operations on the development environment, using either merge or rebase, then run `push` again from the local machine.
+
+Example using merge:
+
+```bash
+cd ~/work/myproject
+git fetch gitsync
+git merge gitsync/main
+# If there are conflicts, edit the files
+git status
+git add <resolved-files>
+git commit
+```
+
+Example using rebase:
+
+```bash
+cd ~/work/myproject
+git fetch gitsync
+git rebase gitsync/main
+# If there are conflicts, edit the files
+git status
+git add <resolved-files>
+git rebase --continue
+```
+
+If the branch is not `main`, replace `gitsync/main` with the target branch. After merge or rebase completes, check status from the local machine and push.
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync push myproject
+```
+
+After rebase, only rewrite commits that exist only on the development environment and have not been pushed to origin yet. If you want to avoid rewriting history on a shared branch, use merge.
 
 ## Branch Switching Workflow
 
@@ -396,7 +462,7 @@ Uncommitted changes are not synchronized. If there are uncommitted changes in th
 
 `push` executes only when the branch on the origin side is an ancestor of the branch on the development environment side. If there are unobtained commits on origin, it stops.
 
-When diverged, automatic resolution is not performed. Execute `pull` on the local machine, follow the displayed instructions to merge or rebase in the development environment, then `push` again.
+When diverged, automatic resolution is not performed. Follow "Workflow When Push Stops", merge or rebase in the development environment, then `push` again.
 
 ## Common Commands
 
