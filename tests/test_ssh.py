@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 from subprocess import CompletedProcess
 from base64 import b64decode
 
@@ -98,6 +99,24 @@ def test_remote_git_url_supports_windows_paths() -> None:
         )
         == "alice@devserver:C:/Users/alice/cache repo/myproject.git"
     )
+
+
+def test_git_ssh_environment_wraps_windows_git_transport() -> None:
+    env = ssh.git_ssh_environment(
+        "windows", {"GIT_SSH_COMMAND": "ssh -i key", "OTHER": "value"}
+    )
+
+    assert env == {
+        "GIT_SSH_COMMAND": f"{sys.executable} -m git_ssh_sync.windows_git_ssh",
+        "GIT_SSH_SYNC_BASE_SSH_COMMAND": "ssh -i key",
+        "OTHER": "value",
+    }
+
+
+def test_git_ssh_environment_leaves_posix_env_unchanged() -> None:
+    env = {"GIT_SSH_COMMAND": "ssh -i key"}
+
+    assert ssh.git_ssh_environment("posix", env) is env
 
 
 def test_remote_path_helpers_use_powershell_for_windows(

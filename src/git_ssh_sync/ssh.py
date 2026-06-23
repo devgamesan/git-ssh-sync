@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shlex
+import sys
 from base64 import b64encode
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -192,6 +193,22 @@ def remote_git_url(*, host: str, user: str, repo_path: str, remote_os: RemoteOS)
     normalized_path = repo_path
     quoted_path = quote(normalized_path, safe="/~:")
     return f"ssh://{user}@{host}{quoted_path}"
+
+
+def git_ssh_environment(
+    remote_os: RemoteOS, env: Mapping[str, str] | None = None
+) -> Mapping[str, str] | None:
+    """Return environment overrides for local Git SSH transport."""
+    if remote_os != "windows":
+        return env
+
+    git_env = dict(env or {})
+    if existing_command := git_env.get("GIT_SSH_COMMAND"):
+        git_env["GIT_SSH_SYNC_BASE_SSH_COMMAND"] = existing_command
+    git_env["GIT_SSH_COMMAND"] = (
+        f"{shlex.quote(sys.executable)} -m git_ssh_sync.windows_git_ssh"
+    )
+    return git_env
 
 
 def remote_parent(path: str, remote_os: RemoteOS) -> str:

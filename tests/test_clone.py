@@ -126,10 +126,10 @@ def test_clone_project_runs_initial_layout_commands(
             (
                 cache_url,
                 ("refs/remotes/origin/main:refs/heads/main",),
-                {"cwd": local_path},
+                {"cwd": local_path, "env": None},
             ),
         ),
-        ("push", (cache_url, ("--tags",), {"cwd": local_path})),
+        ("push", (cache_url, ("--tags",), {"cwd": local_path, "env": None})),
         ("ssh", ("devserver", ("mkdir", "-p", "/home/user/work"), {"user": "user"})),
         (
             "ssh",

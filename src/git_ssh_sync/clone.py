@@ -124,9 +124,15 @@ def clone_project(project: str) -> None:
             remote_cache,
             [f"refs/remotes/origin/{branch}:refs/heads/{branch}"],
             cwd=local_path,
+            env=ssh.git_ssh_environment(dev_os),
         )
         if project_config.options.sync_tags:
-            git.push(remote_cache, ["--tags"], cwd=local_path)
+            git.push(
+                remote_cache,
+                ["--tags"],
+                cwd=local_path,
+                env=ssh.git_ssh_environment(dev_os),
+            )
 
         ssh.remote_mkdir(
             dev_host,
