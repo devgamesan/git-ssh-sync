@@ -123,6 +123,7 @@ def _push_origin_branch_to_cache(
         remote_cache,
         [f"refs/remotes/origin/{branch}:refs/heads/{branch}"],
         cwd=local_path,
+        env=ssh.git_ssh_environment(project_config.dev.os),
     )
 
 
@@ -239,6 +240,7 @@ def _fetch_dev_branch_to_local(
         _work_url(project_config),
         [f"refs/heads/{branch}:refs/remotes/dev/{branch}"],
         cwd=local_path,
+        env=ssh.git_ssh_environment(project_config.dev.os),
     )
 
 

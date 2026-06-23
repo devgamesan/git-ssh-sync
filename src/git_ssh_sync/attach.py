@@ -422,6 +422,7 @@ def _apply_operation(
             cache_url,
             [f"refs/remotes/origin/{branch}:refs/heads/{branch}"],
             cwd=local_path,
+            env=ssh.git_ssh_environment(project_config.dev.os),
         )
         return
 

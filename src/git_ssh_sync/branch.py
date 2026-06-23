@@ -146,6 +146,7 @@ def inspect_project_branch(project: str, project_config: ProjectConfig) -> Branc
             dev_repo_url,
             [f"refs/heads/{branch}:refs/remotes/dev/{branch}"],
             cwd=local_path,
+            env=ssh.git_ssh_environment(project_config.dev.os),
         )
 
     rows: list[BranchRow] = []
