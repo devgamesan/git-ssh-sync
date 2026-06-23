@@ -239,6 +239,23 @@ def remote_mkdir(
     return run_ssh(host, ["mkdir", "-p", path], user=user)
 
 
+def remote_remove(
+    host: str,
+    path: str,
+    *,
+    user: str,
+    remote_os: RemoteOS,
+) -> CommandResult:
+    """Remove a remote path recursively if it exists."""
+    if remote_os == "windows":
+        script = (
+            "Remove-Item -LiteralPath "
+            f"{_powershell_quote(path)} -Recurse -Force -ErrorAction SilentlyContinue"
+        )
+        return run_powershell(host, script, user=user, check=False)
+    return run_ssh(host, ["rm", "-rf", "--", path], user=user, check=False)
+
+
 def remote_command_exists(
     host: str,
     command: str,

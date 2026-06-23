@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from git_ssh_sync import git, ssh
 from git_ssh_sync.config import get_project, load_config
 from git_ssh_sync.errors import CommandExecutionError
+from git_ssh_sync.logging_config import logger
 
 
 class CloneError(RuntimeError):
@@ -46,6 +48,31 @@ def _local_current_branch(local_path: Path) -> str:
     return branch
 
 
+def _cleanup_local_path(path: Path) -> None:
+    if not path.exists():
+        return
+    try:
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+            return
+        path.unlink()
+    except OSError as error:
+        logger.debug("Failed to clean up local path %s: %s", path, error)
+
+
+def _cleanup_remote_path(
+    *, host: str, user: str, path: str, remote_os: ssh.RemoteOS
+) -> None:
+    result = ssh.remote_remove(host, path, user=user, remote_os=remote_os)
+    if result.returncode != 0:
+        logger.debug(
+            "Failed to clean up remote path %s on %s: %s",
+            path,
+            result.environment,
+            result.stderr.strip(),
+        )
+
+
 def clone_project(project: str) -> None:
     """Clone a configured project and initialize its development repositories."""
     app_config = load_config()
@@ -66,48 +93,73 @@ def clone_project(project: str) -> None:
         host=dev_host, user=dev_user, path=work_path, remote_os=dev_os
     )
 
-    local_path.parent.mkdir(parents=True, exist_ok=True)
-    git.run_git(["clone", project_config.origin, str(local_path)])
-    git.fetch("origin", cwd=local_path)
-    branch = _local_current_branch(local_path)
+    local_started = False
+    cache_started = False
+    work_started = False
+    try:
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        local_started = True
+        git.run_git(["clone", project_config.origin, str(local_path)])
+        git.fetch("origin", cwd=local_path)
+        branch = _local_current_branch(local_path)
 
-    ssh.remote_mkdir(
-        dev_host, ssh.remote_parent(cache_path, dev_os), user=dev_user, remote_os=dev_os
-    )
-    ssh.run_remote_command(
-        dev_host,
-        ["git", "init", "--bare", cache_path],
-        user=dev_user,
-        remote_os=dev_os,
-    )
+        ssh.remote_mkdir(
+            dev_host,
+            ssh.remote_parent(cache_path, dev_os),
+            user=dev_user,
+            remote_os=dev_os,
+        )
+        cache_started = True
+        ssh.run_remote_command(
+            dev_host,
+            ["git", "init", "--bare", cache_path],
+            user=dev_user,
+            remote_os=dev_os,
+        )
 
-    remote_cache = ssh.remote_git_url(
-        host=dev_host, user=dev_user, repo_path=cache_path, remote_os=dev_os
-    )
-    git.push(
-        remote_cache,
-        [f"refs/remotes/origin/{branch}:refs/heads/{branch}"],
-        cwd=local_path,
-    )
-    if project_config.options.sync_tags:
-        git.push(remote_cache, ["--tags"], cwd=local_path)
+        remote_cache = ssh.remote_git_url(
+            host=dev_host, user=dev_user, repo_path=cache_path, remote_os=dev_os
+        )
+        git.push(
+            remote_cache,
+            [f"refs/remotes/origin/{branch}:refs/heads/{branch}"],
+            cwd=local_path,
+        )
+        if project_config.options.sync_tags:
+            git.push(remote_cache, ["--tags"], cwd=local_path)
 
-    ssh.remote_mkdir(
-        dev_host, ssh.remote_parent(work_path, dev_os), user=dev_user, remote_os=dev_os
-    )
-    ssh.run_remote_command(
-        dev_host,
-        ["git", "clone", cache_path, work_path],
-        user=dev_user,
-        remote_os=dev_os,
-    )
-    ssh.run_remote_git(
-        dev_host,
-        work_path,
-        ["remote", "rename", "origin", "gitsync"],
-        user=dev_user,
-        remote_os=dev_os,
-    )
-    ssh.run_remote_git(
-        dev_host, work_path, ["switch", branch], user=dev_user, remote_os=dev_os
-    )
+        ssh.remote_mkdir(
+            dev_host,
+            ssh.remote_parent(work_path, dev_os),
+            user=dev_user,
+            remote_os=dev_os,
+        )
+        work_started = True
+        ssh.run_remote_command(
+            dev_host,
+            ["git", "clone", cache_path, work_path],
+            user=dev_user,
+            remote_os=dev_os,
+        )
+        ssh.run_remote_git(
+            dev_host,
+            work_path,
+            ["remote", "rename", "origin", "gitsync"],
+            user=dev_user,
+            remote_os=dev_os,
+        )
+        ssh.run_remote_git(
+            dev_host, work_path, ["switch", branch], user=dev_user, remote_os=dev_os
+        )
+    except Exception:
+        if work_started:
+            _cleanup_remote_path(
+                host=dev_host, user=dev_user, path=work_path, remote_os=dev_os
+            )
+        if cache_started:
+            _cleanup_remote_path(
+                host=dev_host, user=dev_user, path=cache_path, remote_os=dev_os
+            )
+        if local_started:
+            _cleanup_local_path(local_path)
+        raise

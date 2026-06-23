@@ -305,6 +305,76 @@ def test_clone_project_pushes_to_windows_cache_with_scp_like_url(
     )
 
 
+def test_clone_project_cleans_up_created_paths_when_initial_push_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config = _config(tmp_path)
+    local_path = Path(config.projects["myproject"].local.repo_path)
+    removed_remote_paths: list[str] = []
+
+    monkeypatch.setattr(clone, "load_config", lambda: config)
+
+    def fake_run_git(args, **kwargs):
+        if args[0] == "clone":
+            local_path.mkdir(parents=True)
+        stdout = "main\n" if args == ["branch", "--show-current"] else ""
+        return CommandResult("local", ("git", *args), 0, stdout, "", kwargs.get("cwd"))
+
+    def fail_push(remote="origin", refspecs=(), **kwargs):
+        raise CommandExecutionError(
+            environment="local",
+            command=("git", "push", remote, *refspecs),
+            returncode=128,
+            cwd=kwargs.get("cwd"),
+            stderr="push failed\n",
+        )
+
+    monkeypatch.setattr(clone.git, "run_git", fake_run_git)
+    monkeypatch.setattr(
+        clone.git,
+        "fetch",
+        lambda remote="origin", refspecs=(), **kwargs: CommandResult(
+            "local", ("git", "fetch", remote, *refspecs), 0, "", "", kwargs.get("cwd")
+        ),
+    )
+    monkeypatch.setattr(clone.git, "push", fail_push)
+    monkeypatch.setattr(
+        clone.ssh,
+        "remote_path_exists",
+        lambda *args, **kwargs: CommandResult(
+            "ssh:user@devserver", ("ssh", "devserver"), 1, "", ""
+        ),
+    )
+    monkeypatch.setattr(
+        clone.ssh,
+        "remote_mkdir",
+        lambda *args, **kwargs: CommandResult(
+            "ssh:user@devserver", ("ssh", "devserver"), 0, "", ""
+        ),
+    )
+    monkeypatch.setattr(
+        clone.ssh,
+        "run_remote_command",
+        lambda *args, **kwargs: CommandResult(
+            "ssh:user@devserver", ("ssh", "devserver"), 0, "", ""
+        ),
+    )
+
+    def fake_remote_remove(host, path, **kwargs):
+        removed_remote_paths.append(path)
+        return CommandResult(
+            f"ssh:{kwargs['user']}@{host}", ("ssh", host, "rm"), 0, "", ""
+        )
+
+    monkeypatch.setattr(clone.ssh, "remote_remove", fake_remote_remove)
+
+    with pytest.raises(CommandExecutionError, match="push failed"):
+        clone.clone_project("myproject")
+
+    assert not local_path.exists()
+    assert removed_remote_paths == [config.projects["myproject"].dev.cache_path]
+
+
 def test_clone_project_stops_when_local_path_exists(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

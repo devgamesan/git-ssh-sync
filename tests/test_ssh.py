@@ -127,6 +127,54 @@ def test_remote_path_helpers_use_powershell_for_windows(
     )
 
 
+def test_remote_remove_uses_powershell_for_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(git.subprocess, "run", fake_run)
+
+    result = ssh.remote_remove(
+        "devserver",
+        "C:\\Users\\alice\\work repo",
+        user="alice",
+        remote_os="windows",
+    )
+
+    assert result.returncode == 0
+    assert calls[0][0][:2] == ["ssh", "alice@devserver"]
+    assert calls[0][1]["check"] is False
+    assert _decoded_powershell_script(calls[0][0]) == (
+        "Remove-Item -LiteralPath 'C:\\Users\\alice\\work repo' "
+        "-Recurse -Force -ErrorAction SilentlyContinue"
+    )
+
+
+def test_remote_remove_uses_rm_for_posix(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(git.subprocess, "run", fake_run)
+
+    ssh.remote_remove(
+        "devserver", "/home/alice/work repo", user="alice", remote_os="posix"
+    )
+
+    assert calls[0][0] == [
+        "ssh",
+        "alice@devserver",
+        "rm -rf -- '/home/alice/work repo'",
+    ]
+    assert calls[0][1]["check"] is False
+
+
 def test_run_ssh_raises_contextual_error_on_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
