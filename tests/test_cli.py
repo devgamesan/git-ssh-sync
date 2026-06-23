@@ -1,5 +1,6 @@
 from typer.testing import CliRunner
 
+from git_ssh_sync import __version__
 from git_ssh_sync import cli
 from git_ssh_sync.cli import app
 from git_ssh_sync.attach import AttachError
@@ -34,6 +35,13 @@ def test_top_level_help() -> None:
         "recover",
     ):
         assert command in result.output
+
+
+def test_version_option_matches_package_version() -> None:
+    result = runner.invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.output.strip() == f"git-ssh-sync {__version__}"
 
 
 def test_subcommand_help() -> None:
