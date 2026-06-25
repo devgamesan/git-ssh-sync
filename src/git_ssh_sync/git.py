@@ -197,6 +197,7 @@ def remote(
     cwd: str | Path | None = None,
     env: Mapping[str, str] | None = None,
     verbose: bool = False,
+    check: bool = True,
 ) -> CommandResult:
     """Run `git remote`."""
-    return run_git(["remote", *args], cwd=cwd, env=env, verbose=verbose)
+    return run_git(["remote", *args], cwd=cwd, env=env, verbose=verbose, check=check)

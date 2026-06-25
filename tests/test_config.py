@@ -47,6 +47,20 @@ def test_init_project_saves_defaults_and_expands_local_path(
     assert loaded_project.dev.os == "posix"
 
 
+def test_default_config_path_uses_xdg_config_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+
+    from git_ssh_sync.config import default_config_path
+
+    assert (
+        default_config_path()
+        == tmp_path / "xdg-config" / "git-ssh-sync" / "config.yaml"
+    )
+
+
 def test_build_project_config_uses_windows_cache_default() -> None:
     project = build_project_config(
         "myproject",
@@ -59,8 +73,7 @@ def test_build_project_config_uses_windows_cache_default() -> None:
 
     assert project.dev.work_path == "C:\\Users\\user\\work\\myproject"
     assert (
-        project.dev.cache_path
-        == "C:\\Users\\user\\.git-ssh-sync\\cache\\myproject.git"
+        project.dev.cache_path == "C:\\Users\\user\\.git-ssh-sync\\cache\\myproject.git"
     )
 
 
@@ -88,8 +101,7 @@ projects:
 
     assert project.dev.work_path == "C:\\Users\\user\\work\\myproject"
     assert (
-        project.dev.cache_path
-        == "C:\\Users\\user\\.git-ssh-sync\\cache\\myproject.git"
+        project.dev.cache_path == "C:\\Users\\user\\.git-ssh-sync\\cache\\myproject.git"
     )
 
 

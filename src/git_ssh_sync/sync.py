@@ -90,8 +90,44 @@ def _ensure_origin_branch(local_path: Path, branch: str) -> None:
         )
 
 
+def _origin_branch_exists_on_remote(local_path: Path, branch: str) -> bool:
+    result = git.run_git(
+        ["ls-remote", "--exit-code", "--heads", "origin", branch],
+        cwd=local_path,
+        check=False,
+    )
+    if result.returncode == 0:
+        return True
+    if result.returncode == 2:
+        return False
+    raise CommandExecutionError(
+        environment=result.environment,
+        command=result.command,
+        returncode=result.returncode,
+        cwd=result.cwd,
+        stdout=result.stdout,
+        stderr=result.stderr,
+    )
+
+
+def _ensure_origin_branch_on_remote(local_path: Path, branch: str) -> None:
+    if not _origin_branch_exists_on_remote(local_path, branch):
+        raise SyncError(f"Origin branch does not exist: {branch}")
+
+
 def _ensure_origin_branch_missing(project: str, local_path: Path, branch: str) -> None:
     if _origin_branch_exists(local_path, branch):
+        raise SyncError(
+            f"Origin branch already exists: {branch}\n\n"
+            "Run checkout without --base to use the existing branch:\n\n"
+            f"  git-ssh-sync checkout {project} {branch}"
+        )
+
+
+def _ensure_origin_branch_missing_on_remote(
+    project: str, local_path: Path, branch: str
+) -> None:
+    if _origin_branch_exists_on_remote(local_path, branch):
         raise SyncError(
             f"Origin branch already exists: {branch}\n\n"
             "Run checkout without --base to use the existing branch:\n\n"
@@ -369,6 +405,47 @@ def _ensure_pushable(
     )
 
 
+def _ensure_pushable_from_development(
+    project: str, project_config: ProjectConfig, local_path: Path, branch: str
+) -> None:
+    origin_head = git.rev_parse([f"refs/remotes/origin/{branch}"], cwd=local_path)
+    origin_commit = origin_head.stdout.strip()
+    result = ssh.run_remote_git(
+        project_config.dev.host,
+        project_config.dev.work_path,
+        ["merge-base", "--is-ancestor", origin_commit, f"refs/heads/{branch}"],
+        user=project_config.dev.user,
+        check=False,
+        remote_os=project_config.dev.os,
+    )
+    if result.returncode == 0:
+        return
+    if result.returncode == 1:
+        current_branch = _remote_current_branch(project_config)
+        current_commit = _remote_short_head(project_config)
+        raise SyncError(
+            f"Cannot push {branch}.\n\n"
+            f"origin/{branch} has commits that are not included in dev/{branch}.\n\n"
+            f"Project:\n  {project}\n\n"
+            "Development:\n"
+            f"  host: {project_config.dev.host}\n"
+            f"  path: {project_config.dev.work_path}\n"
+            f"  branch: {current_branch}\n"
+            f"  commit: {current_commit}\n\n"
+            "Run:\n\n"
+            f"  git-ssh-sync pull {project}\n\n"
+            "Then resolve the branch on the development environment before pushing again."
+        )
+    raise CommandExecutionError(
+        environment=result.environment,
+        command=result.command,
+        returncode=result.returncode,
+        cwd=result.cwd,
+        stdout=result.stdout,
+        stderr=result.stderr,
+    )
+
+
 def _load_project(project: str) -> ProjectConfig:
     return get_project(load_config(), project)
 
@@ -456,12 +533,12 @@ def checkout_project(
         operations = ["fetch origin in the gateway repository"]
         if create:
             base = base_branch or _require_remote_current_branch(project_config)
-            _ensure_origin_branch(local_path, base)
-            _ensure_origin_branch_missing(project, local_path, branch)
+            _ensure_origin_branch_on_remote(local_path, base)
+            _ensure_origin_branch_missing_on_remote(project, local_path, branch)
             preflight.extend(
                 [
-                    f"origin/{base} exists in the gateway repository",
-                    f"origin/{branch} does not exist in the gateway repository",
+                    f"origin/{base} exists on origin",
+                    f"origin/{branch} does not exist on origin",
                 ]
             )
             operations.extend(
@@ -470,12 +547,13 @@ def checkout_project(
                     f"fetch origin/{branch} into the gateway repository",
                 ]
             )
-        _ensure_origin_branch(local_path, branch)
+        else:
+            _ensure_origin_branch_on_remote(local_path, branch)
         _ensure_dev_clean(project, project_config)
         branch_exists = _remote_branch_exists(project_config, branch)
         preflight.extend(
             [
-                f"origin/{branch} exists in the gateway repository",
+                f"origin/{branch} exists on origin",
                 "development work tree is clean",
             ]
         )
@@ -527,7 +605,9 @@ def push_project(project: str, *, dry_run: bool = False) -> None:
     if dry_run:
         git.run_git(["fetch", "--dry-run", "origin"], cwd=local_path)
         _ensure_origin_branch(local_path, selected_branch)
-        _ensure_pushable(project, project_config, local_path, selected_branch)
+        _ensure_pushable_from_development(
+            project, project_config, local_path, selected_branch
+        )
         _print_dry_run_plan(
             project=project,
             branch=selected_branch,
