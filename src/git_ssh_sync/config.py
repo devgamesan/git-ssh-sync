@@ -109,7 +109,7 @@ def default_config_path() -> Path:
     if sys.platform == "win32":
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     else:
-        base = Path.home() / ".config"
+        base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
     return base / "git-ssh-sync" / "config.yaml"
 
 

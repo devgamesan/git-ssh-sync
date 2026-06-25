@@ -10,6 +10,8 @@
 
 実行には、テスト用 origin リポジトリと、SSH 接続可能な Linux または Windows リモート環境が必要です。origin リポジトリには一時ブランチを作成して削除します。リモート環境には一時 work repo と cache repo を作成して削除します。
 
+origin へのアクセスには、ローカルマシンの `git` が通常使用している認証情報を使います。HTTPS の private repository を使う場合は credential helper、SSH URL を使う場合は SSH key など、非対話で `git clone` / `git fetch` / `git push` できる状態にしてください。テスト中の `git-ssh-sync` 設定ファイルは `XDG_CONFIG_HOME` を一時ディレクトリへ向けて隔離しますが、`HOME` は変更しないため、ローカルの Git 認証設定はそのまま使われます。
+
 Linux リモートだけで実行する例:
 
 ```bash

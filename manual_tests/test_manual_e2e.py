@@ -418,6 +418,10 @@ def _assert_cli_failure(
     return result
 
 
+def _normalized_output(result: CommandResult) -> str:
+    return " ".join((result.stdout + result.stderr).split())
+
+
 def _create_attach_fixture(
     env: dict[str, str],
     tmp_path: Path,
@@ -562,7 +566,6 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
     targets = _remote_targets(run_id)
     default_branch = _detect_default_branch(origin_url)
     env = os.environ.copy()
-    env["HOME"] = str(tmp_path / "home")
     env["XDG_CONFIG_HOME"] = str(tmp_path / "xdg-config")
 
     created_branches: list[str] = []
@@ -601,6 +604,8 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
                     "config",
                     "set",
                     target.project,
+                    "--local-repo-path",
+                    str(tmp_path / f"gateway-{target.project}"),
                     "--dev-cache-path",
                     target.cache_path,
                 ),
@@ -752,9 +757,7 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
                 f"Add {target.name} origin ahead update",
             )
             origin_ahead_push = _assert_cli_failure(env, 1, "push", target.project)
-            assert "not included in dev" in (
-                origin_ahead_push.stdout + origin_ahead_push.stderr
-            )
+            assert "not included in dev" in _normalized_output(origin_ahead_push)
             _run(_cli_command(env, "pull", target.project), env=env)
 
             _run(["git", "switch", "-c", diverged_branch, branch], cwd=origin_repo)
@@ -782,11 +785,9 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
                 f"Add {target.name} diverged remote update",
             )
             diverged_push = _assert_cli_failure(env, 1, "push", target.project)
-            assert "not included in dev" in (
-                diverged_push.stdout + diverged_push.stderr
-            )
+            assert "not included in dev" in _normalized_output(diverged_push)
             diverged_pull = _assert_cli_failure(env, 1, "pull", target.project)
-            assert "have diverged" in (diverged_pull.stdout + diverged_pull.stderr)
+            assert "have diverged" in _normalized_output(diverged_pull)
             _remote_git(target, "reset", "--hard", f"gitsync/{diverged_branch}")
 
             invalid_checkout = _run(
