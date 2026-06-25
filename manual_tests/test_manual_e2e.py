@@ -428,6 +428,11 @@ def _create_attach_fixture(
 ) -> Path:
     local_path = tmp_path / f"gateway-{project}"
     _origin_clone(origin_url, local_path)
+    attach_origin_path = tmp_path / f"origin-{project}.git"
+    _run(["git", "clone", "--bare", str(local_path), str(attach_origin_path)])
+    _run(
+        ["git", "remote", "set-url", "origin", str(attach_origin_path)], cwd=local_path
+    )
     branch = _run(["git", "branch", "--show-current"], cwd=local_path).stdout.strip()
     _remote_seed_work_repo(target, local_path, layout.work_path, branch)
     _run(
@@ -436,7 +441,7 @@ def _create_attach_fixture(
             "init",
             project,
             "--origin",
-            origin_url,
+            str(attach_origin_path),
             "--dev-host",
             target.host,
             "--dev-user",
