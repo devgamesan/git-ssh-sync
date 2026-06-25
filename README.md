@@ -37,6 +37,15 @@ Terms used throughout this document:
 - `dev work repo`: Repository where you edit, build, test, and commit on the development environment
 - `gitsync remote`: Remote in the dev work repo that points to the dev bare cache repo
 
+## Current limitations
+
+The following features are not supported yet:
+
+- Git LFS
+- Git submodules
+- automatic conflict resolution
+- synchronizing uncommitted file changes
+
 ## Prerequisites
 
 `git-ssh-sync` assumes the following configuration:

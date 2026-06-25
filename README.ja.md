@@ -37,6 +37,15 @@ dev work repo
 - `dev work repo`: 開発環境上で実際に編集、ビルド、テスト、commit する repository
 - `gitsync remote`: dev work repo から dev bare cache repo を参照するための remote
 
+## 現在の制限
+
+現時点では次の機能には対応していません。
+
+- Git LFS
+- Git submodule
+- 自動コンフリクト解決
+- 未コミット変更の同期
+
 ## 前提
 
 `git-ssh-sync` は次のような構成を前提にしています。
