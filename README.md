@@ -293,6 +293,16 @@ execution after reviewing the plan.
 git-ssh-sync attach myproject --yes
 ```
 
+Use this table to choose between setup diagnostics, wiring repair, and recovery
+after an interrupted sync.
+
+| Situation | Command |
+|---|---|
+| Check initial setup or connectivity | `git-ssh-sync doctor myproject` |
+| Repair missing or mismatched `gitsync` remote/cache wiring | `git-ssh-sync doctor myproject --repair` |
+| Diagnose after interrupted `pull` / `push` | `git-ssh-sync recover myproject` |
+| Apply only safe wiring repairs after interruption | `git-ssh-sync recover myproject --yes` |
+
 If only the `gitsync` remote or cache wiring is missing or mismatched, run
 `doctor --repair` to inspect and repair it through the same preflight checks.
 
