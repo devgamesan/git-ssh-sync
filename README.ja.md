@@ -116,6 +116,37 @@ uv tool install git+https://github.com/devgamesan/git-ssh-sync.git
 git-ssh-sync --help
 ```
 
+## クイックスタート
+
+`git-ssh-sync` のインストール後、設定から日常同期までの最短手順は次のとおりです。
+
+```bash
+uv tool install git-ssh-sync
+
+git-ssh-sync init myproject \
+  --origin git@github.com:example/myproject.git \
+  --dev-host devserver \
+  --dev-user user \
+  --dev-path /home/user/work/myproject
+
+git-ssh-sync clone myproject
+git-ssh-sync doctor myproject
+
+git-ssh-sync pull myproject
+
+# 開発環境上:
+# cd ~/work/myproject
+# git add .
+# git commit -m "Add feature"
+
+git-ssh-sync status myproject
+git-ssh-sync push myproject
+```
+
+初回セットアップでは `clone` と `doctor` まで実行します。日常作業では、編集前に
+ローカルマシンから `pull` し、開発環境で commit してから、ローカルマシンで
+`status` を確認して `push` します。
+
 ## 設定
 
 最初に、同期したいプロジェクトを登録します。

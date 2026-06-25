@@ -116,6 +116,37 @@ After installation, verify that the command can be executed.
 git-ssh-sync --help
 ```
 
+## Quick start
+
+After installing `git-ssh-sync`, the shortest path from setup to daily sync is:
+
+```bash
+uv tool install git-ssh-sync
+
+git-ssh-sync init myproject \
+  --origin git@github.com:example/myproject.git \
+  --dev-host devserver \
+  --dev-user user \
+  --dev-path /home/user/work/myproject
+
+git-ssh-sync clone myproject
+git-ssh-sync doctor myproject
+
+git-ssh-sync pull myproject
+
+# On the development environment:
+# cd ~/work/myproject
+# git add .
+# git commit -m "Add feature"
+
+git-ssh-sync status myproject
+git-ssh-sync push myproject
+```
+
+Run `clone` and `doctor` for the first setup. For regular work, run `pull`
+before editing, commit on the development environment, then check `status` and
+run `push` from the local machine.
+
 ## Configuration
 
 First, register the project you want to synchronize.
