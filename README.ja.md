@@ -14,6 +14,29 @@
 
 このツールはファイル同期ツールではありません。同期するのは Git オブジェクトとブランチです。ソース編集、ビルド、テスト、コミットは開発環境で行い、GitHub / GitLab との通信はローカルマシンで行います。
 
+## アーキテクチャ
+
+`git-ssh-sync` は、GitHub / GitLab へのアクセスをローカルマシンに寄せ、
+Git 作業を開発環境上で行う構成を取ります。
+
+```text
+origin: GitHub / GitLab
+    ↑↓
+local gateway repo
+    ↑↓ git over SSH
+dev bare cache repo
+    ↑↓
+dev work repo
+```
+
+この README では、次の用語を使います。
+
+- `origin`: GitHub / GitLab 側の本来の remote repository
+- `local gateway repo`: ローカルマシン上の中継用 repository
+- `dev bare cache repo`: 開発環境上の bare repository
+- `dev work repo`: 開発環境上で実際に編集、ビルド、テスト、commit する repository
+- `gitsync remote`: dev work repo から dev bare cache repo を参照するための remote
+
 ## 前提
 
 `git-ssh-sync` は次のような構成を前提にしています。
@@ -214,11 +237,8 @@ git-ssh-sync clone myproject
 git-ssh-sync doctor myproject
 ```
 
-`clone` はローカルマシンに gateway repo を作成し、開発環境に cache repo と work repo を配置します。
-
-- gateway repo: ローカルマシン上にある中継用リポジトリ
-- cache repo: 開発環境上にある bare リポジトリ
-- work repo: 開発環境上で実際に編集、ビルド、テスト、コミットを行うリポジトリ
+`clone` は上記の local gateway repo を作成し、開発環境に dev bare cache repo と
+dev work repo を配置します。
 
 以後、開発環境では work repo を通常の Git リポジトリとして扱えます。
 
