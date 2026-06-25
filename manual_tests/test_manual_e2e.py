@@ -37,6 +37,12 @@ class RemoteTarget:
     cache_path: str
 
 
+@dataclass(frozen=True)
+class RemoteLayout:
+    work_path: str
+    cache_path: str
+
+
 def _run(
     command: Iterable[str],
     *,
@@ -187,6 +193,19 @@ def _cleanup_remote(target: RemoteTarget) -> None:
     )
 
 
+def _cleanup_remote_layout(target: RemoteTarget, layout: RemoteLayout) -> None:
+    layout_target = RemoteTarget(
+        name=target.name,
+        project=target.project,
+        host=target.host,
+        user=target.user,
+        os_name=target.os_name,
+        work_path=layout.work_path,
+        cache_path=layout.cache_path,
+    )
+    _cleanup_remote(layout_target)
+
+
 def _remote_git(target: RemoteTarget, *args: str, check: bool = True) -> CommandResult:
     if target.os_name == "windows":
         work_path = _powershell_single_quote(target.work_path)
@@ -198,6 +217,53 @@ def _remote_git(target: RemoteTarget, *args: str, check: bool = True) -> Command
         target,
         f"git -C {shlex.quote(target.work_path)} {quoted_args}",
         check=check,
+    )
+
+
+def _remote_git_at(
+    target: RemoteTarget, repo_path: str, *args: str, check: bool = True
+) -> CommandResult:
+    repo_target = RemoteTarget(
+        name=target.name,
+        project=target.project,
+        host=target.host,
+        user=target.user,
+        os_name=target.os_name,
+        work_path=repo_path,
+        cache_path=target.cache_path,
+    )
+    return _remote_git(repo_target, *args, check=check)
+
+
+def _remote_parent_path(target: RemoteTarget, path: str) -> str:
+    if target.os_name == "windows":
+        result = _remote_shell(
+            target,
+            f"Split-Path -Parent {_powershell_single_quote(path)}",
+        )
+        return result.stdout.strip()
+
+    return str(Path(path).parent)
+
+
+def _remote_clone_origin(target: RemoteTarget, origin_url: str, work_path: str) -> None:
+    if target.os_name == "windows":
+        parent = _powershell_single_quote(_remote_parent_path(target, work_path))
+        destination = _powershell_single_quote(work_path)
+        origin = _powershell_single_quote(origin_url)
+        _remote_shell(
+            target,
+            f"New-Item -ItemType Directory -Force -Path {parent}; "
+            f"& git clone {origin} {destination}",
+        )
+        return
+
+    _remote_shell(
+        target,
+        (
+            f"mkdir -p {shlex.quote(_remote_parent_path(target, work_path))} && "
+            f"git clone {shlex.quote(origin_url)} {shlex.quote(work_path)}"
+        ),
     )
 
 
@@ -303,6 +369,146 @@ def _delete_origin_branch(origin_url: str, branch: str) -> None:
     _run(["git", "push", origin_url, "--delete", branch], check=False)
 
 
+def _assert_cli_failure(
+    env: dict[str, str], expected_returncode: int, *args: str
+) -> CommandResult:
+    result = _run(_cli_command(env, *args), env=env, check=False)
+    assert result.returncode == expected_returncode
+    return result
+
+
+def _create_attach_fixture(
+    env: dict[str, str],
+    tmp_path: Path,
+    origin_url: str,
+    target: RemoteTarget,
+    project: str,
+    layout: RemoteLayout,
+) -> Path:
+    local_path = tmp_path / f"gateway-{project}"
+    _origin_clone(origin_url, local_path)
+    _remote_clone_origin(target, origin_url, layout.work_path)
+    _run(
+        _cli_command(
+            env,
+            "init",
+            project,
+            "--origin",
+            origin_url,
+            "--dev-host",
+            target.host,
+            "--dev-user",
+            target.user,
+            "--dev-os",
+            target.os_name,
+            "--dev-path",
+            layout.work_path,
+        ),
+        env=env,
+    )
+    _run(
+        _cli_command(
+            env,
+            "config",
+            "set",
+            project,
+            "--local-repo-path",
+            str(local_path),
+            "--dev-cache-path",
+            layout.cache_path,
+        ),
+        env=env,
+    )
+    return local_path
+
+
+def _run_attach_checks(
+    env: dict[str, str],
+    tmp_path: Path,
+    origin_url: str,
+    run_id: str,
+    target: RemoteTarget,
+) -> None:
+    attach_project = f"manual-attach-{target.name}-{run_id}"
+    attach_layout = RemoteLayout(
+        work_path=(
+            f"C:\\Users\\{target.user}\\work\\git-ssh-sync-attach-{run_id}"
+            if target.os_name == "windows"
+            else f"/home/{target.user}/work/git-ssh-sync-attach-{run_id}"
+        ),
+        cache_path=(
+            f"C:\\Users\\{target.user}\\.git-ssh-sync\\cache\\{attach_project}.git"
+            if target.os_name == "windows"
+            else f"/home/{target.user}/.git-ssh-sync/cache/{attach_project}.git"
+        ),
+    )
+    dirty_project = f"manual-attach-dirty-{target.name}-{run_id}"
+    dirty_layout = RemoteLayout(
+        work_path=(
+            f"C:\\Users\\{target.user}\\work\\git-ssh-sync-attach-dirty-{run_id}"
+            if target.os_name == "windows"
+            else f"/home/{target.user}/work/git-ssh-sync-attach-dirty-{run_id}"
+        ),
+        cache_path=(
+            f"C:\\Users\\{target.user}\\.git-ssh-sync\\cache\\{dirty_project}.git"
+            if target.os_name == "windows"
+            else f"/home/{target.user}/.git-ssh-sync/cache/{dirty_project}.git"
+        ),
+    )
+
+    for layout in (attach_layout, dirty_layout):
+        _cleanup_remote_layout(target, layout)
+
+    try:
+        _create_attach_fixture(
+            env, tmp_path, origin_url, target, attach_project, attach_layout
+        )
+        dry_run = _run(
+            _cli_command(env, "attach", attach_project, "--dry-run"), env=env
+        )
+        assert "Planned operations" in dry_run.stdout
+        _run(_cli_command(env, "attach", attach_project, "--yes"), env=env)
+        _run(_cli_command(env, "doctor", attach_project), env=env)
+        gitsync = _remote_git_at(
+            target, attach_layout.work_path, "remote", "get-url", "gitsync"
+        )
+        assert gitsync.stdout.strip() == attach_layout.cache_path
+
+        _create_attach_fixture(
+            env, tmp_path, origin_url, target, dirty_project, dirty_layout
+        )
+        dirty_target = RemoteTarget(
+            name=target.name,
+            project=dirty_project,
+            host=target.host,
+            user=target.user,
+            os_name=target.os_name,
+            work_path=dirty_layout.work_path,
+            cache_path=dirty_layout.cache_path,
+        )
+        _remote_create_dirty_file(dirty_target)
+        dirty_attach = _assert_cli_failure(env, 1, "attach", dirty_project, "--dry-run")
+        assert "dirty" in (dirty_attach.stdout + dirty_attach.stderr).lower()
+        missing_gitsync = _remote_git_at(
+            target,
+            dirty_layout.work_path,
+            "remote",
+            "get-url",
+            "gitsync",
+            check=False,
+        )
+        assert missing_gitsync.returncode != 0
+    finally:
+        for project in (attach_project, dirty_project):
+            _run(
+                _cli_command(env, "config", "remove", project, "--yes"),
+                env=env,
+                check=False,
+            )
+        for layout in (attach_layout, dirty_layout):
+            _cleanup_remote_layout(target, layout)
+
+
 def test_manual_checklist_e2e(tmp_path: Path) -> None:
     origin_url = _required_env("GSS_TEST_ORIGIN_URL")
     run_id = uuid4().hex[:8]
@@ -322,6 +528,8 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
         _run(_cli_command(env, "--version"), env=env)
 
         for target in targets:
+            _run_attach_checks(env, tmp_path, origin_url, run_id, target)
+
             _run(
                 _cli_command(
                     env,
@@ -384,6 +592,20 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
                 _cli_command(env, "dev", "log", target.project, "--max-count", "5"),
                 env=env,
             )
+            log_file = tmp_path / f"{target.name}-git-ssh-sync.log"
+            _run(_cli_command(env, "--verbose", "status", target.project), env=env)
+            _run(_cli_command(env, "--debug", "status", target.project), env=env)
+            _run(
+                _cli_command(
+                    env,
+                    "--log-file",
+                    str(log_file),
+                    "status",
+                    target.project,
+                ),
+                env=env,
+            )
+            assert log_file.exists()
 
             branch = f"manual/{run_id}/{target.name}"
             new_branch = f"manual/{run_id}/{target.name}-new"
@@ -462,6 +684,63 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
                 ),
                 env=env,
             )
+
+            ahead_branch = f"manual/{run_id}/{target.name}-ahead"
+            diverged_branch = f"manual/{run_id}/{target.name}-diverged"
+            created_branches.extend([ahead_branch, diverged_branch])
+            _run(["git", "switch", "-c", ahead_branch, branch], cwd=origin_repo)
+            _origin_commit_and_push(
+                origin_repo,
+                ahead_branch,
+                f"{target.name}-ahead-start.txt",
+                f"{target.name} ahead start",
+                f"Add {target.name} ahead branch",
+            )
+            _run(_cli_command(env, "checkout", target.project, ahead_branch), env=env)
+            _origin_commit_and_push(
+                origin_repo,
+                ahead_branch,
+                f"{target.name}-ahead-origin.txt",
+                f"{target.name} origin ahead",
+                f"Add {target.name} origin ahead update",
+            )
+            origin_ahead_push = _assert_cli_failure(env, 1, "push", target.project)
+            assert "not included in dev" in (
+                origin_ahead_push.stdout + origin_ahead_push.stderr
+            )
+            _run(_cli_command(env, "pull", target.project), env=env)
+
+            _run(["git", "switch", "-c", diverged_branch, branch], cwd=origin_repo)
+            _origin_commit_and_push(
+                origin_repo,
+                diverged_branch,
+                f"{target.name}-diverged-start.txt",
+                f"{target.name} diverged start",
+                f"Add {target.name} diverged branch",
+            )
+            _run(
+                _cli_command(env, "checkout", target.project, diverged_branch), env=env
+            )
+            _origin_commit_and_push(
+                origin_repo,
+                diverged_branch,
+                f"{target.name}-diverged-origin.txt",
+                f"{target.name} diverged origin",
+                f"Add {target.name} diverged origin update",
+            )
+            _remote_append_and_commit(
+                target,
+                f"{target.name}-diverged-remote.txt",
+                f"{target.name} diverged remote",
+                f"Add {target.name} diverged remote update",
+            )
+            diverged_push = _assert_cli_failure(env, 1, "push", target.project)
+            assert "not included in dev" in (
+                diverged_push.stdout + diverged_push.stderr
+            )
+            diverged_pull = _assert_cli_failure(env, 1, "pull", target.project)
+            assert "have diverged" in (diverged_pull.stdout + diverged_pull.stderr)
+            _remote_git(target, "reset", "--hard", f"gitsync/{diverged_branch}")
 
             invalid_checkout = _run(
                 _cli_command(
