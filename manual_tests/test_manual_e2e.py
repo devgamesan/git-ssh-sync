@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+import sys
 from base64 import b64encode
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -248,15 +249,35 @@ def _remote_parent_path(target: RemoteTarget, path: str) -> str:
     return str(Path(path).parent)
 
 
-def _remote_clone_origin(target: RemoteTarget, origin_url: str, work_path: str) -> None:
+def _remote_git_url(target: RemoteTarget, repo_path: str) -> str:
+    if target.os_name == "windows":
+        normalized_path = repo_path.replace("\\", "/")
+        return f"{target.user}@{target.host}:{normalized_path}"
+    return f"ssh://{target.user}@{target.host}{repo_path}"
+
+
+def _git_ssh_env(target: RemoteTarget) -> dict[str, str] | None:
+    if target.os_name != "windows":
+        return None
+
+    env = os.environ.copy()
+    if existing_command := env.get("GIT_SSH_COMMAND"):
+        env["GIT_SSH_SYNC_BASE_SSH_COMMAND"] = existing_command
+    env["GIT_SSH_COMMAND"] = (
+        f"{shlex.quote(sys.executable)} -m git_ssh_sync.windows_git_ssh"
+    )
+    return env
+
+
+def _remote_init_work_repo(target: RemoteTarget, work_path: str) -> None:
     if target.os_name == "windows":
         parent = _powershell_single_quote(_remote_parent_path(target, work_path))
         destination = _powershell_single_quote(work_path)
-        origin = _powershell_single_quote(origin_url)
         _remote_shell(
             target,
             f"New-Item -ItemType Directory -Force -Path {parent}; "
-            f"& git clone {origin} {destination}",
+            f"& git init {destination}; "
+            f"& git -C {destination} config receive.denyCurrentBranch updateInstead",
         )
         return
 
@@ -264,9 +285,27 @@ def _remote_clone_origin(target: RemoteTarget, origin_url: str, work_path: str) 
         target,
         (
             f"mkdir -p {shlex.quote(_remote_parent_path(target, work_path))} && "
-            f"git clone {shlex.quote(origin_url)} {shlex.quote(work_path)}"
+            f"git init {shlex.quote(work_path)} && "
+            f"git -C {shlex.quote(work_path)} config receive.denyCurrentBranch updateInstead"
         ),
     )
+
+
+def _remote_seed_work_repo(
+    target: RemoteTarget, local_path: Path, work_path: str, branch: str
+) -> None:
+    _remote_init_work_repo(target, work_path)
+    _run(
+        [
+            "git",
+            "push",
+            _remote_git_url(target, work_path),
+            f"HEAD:refs/heads/{branch}",
+        ],
+        cwd=local_path,
+        env=_git_ssh_env(target),
+    )
+    _remote_git_at(target, work_path, "checkout", branch)
 
 
 def _remote_append_and_commit(
@@ -389,7 +428,8 @@ def _create_attach_fixture(
 ) -> Path:
     local_path = tmp_path / f"gateway-{project}"
     _origin_clone(origin_url, local_path)
-    _remote_clone_origin(target, origin_url, layout.work_path)
+    branch = _run(["git", "branch", "--show-current"], cwd=local_path).stdout.strip()
+    _remote_seed_work_repo(target, local_path, layout.work_path, branch)
     _run(
         _cli_command(
             env,
