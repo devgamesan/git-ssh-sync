@@ -12,6 +12,26 @@
 
 This tool is designed for niche environments where outbound network access is restricted, such as high-security enterprises and projects that only allow limited inbound communication (e.g., SSH, RDP).
 
+## Start here
+
+If you are new to `git-ssh-sync`, read these sections in order:
+
+| Goal | Section |
+|---|---|
+| Check whether this tool fits your environment | [Who is this for?](#who-is-this-for) |
+| Understand the repository layout | [Architecture](#architecture) |
+| Install and run the shortest setup | [Quick start](#quick-start) |
+| Register a real project | [Configuration](#configuration) |
+| Work day to day | [Daily Development Workflow](#daily-development-workflow) |
+| Recover from stopped synchronization | [Troubleshooting](#troubleshooting) |
+
+The common path is:
+
+1. Install `git-ssh-sync` on the local machine.
+2. Register a project with `init`.
+3. Create or attach the development repositories with `clone` or `attach`.
+4. Run `pull` before editing and `push` after committing on the development environment.
+
 ## Who is this for?
 
 Use `git-ssh-sync` if:
@@ -43,11 +63,13 @@ dev work repo
 
 Terms used throughout this document:
 
-- `origin`: Original remote repository on GitHub / GitLab
-- `local gateway repo`: Relay repository on the local machine
-- `dev bare cache repo`: Bare repository on the development environment
-- `dev work repo`: Repository where you edit, build, test, and commit on the development environment
-- `gitsync remote`: Remote in the dev work repo that points to the dev bare cache repo
+| Term | Meaning |
+|---|---|
+| `origin` | Original remote repository on GitHub / GitLab |
+| `local gateway repo` | Relay repository on the local machine |
+| `dev bare cache repo` | Bare repository on the development environment |
+| `dev work repo` | Repository where you edit, build, test, and commit on the development environment |
+| `gitsync remote` | Remote in the dev work repo that points to the dev bare cache repo |
 
 ## Current limitations
 
@@ -70,20 +92,14 @@ Local machine
 Development environment
 ```
 
-Local machine:
+| Place | Requirements |
+|---|---|
+| Local machine | Can access GitHub / GitLab, can SSH to the development environment, and has `git` and `uv` available |
+| Development environment | Can be accessed via SSH from the local machine, has `git` available, and does not need direct GitHub / GitLab access |
 
-- Can access GitHub / GitLab
-- Can SSH to the development environment
-- Has `git` and `uv` available
-- Uses `git-ssh-sync` for commit synchronization, status checks, and diagnostics between GitHub/GitLab and the development environment
-
-Development environment:
-
-- Can be accessed via SSH from the local machine
-- Cannot directly access GitHub / GitLab from the development environment
-- Has `git` available
-- Performs source editing, building, testing, and committing
-- Synchronizes with GitHub/GitLab via the local machine
+Run `git-ssh-sync` on the local machine. Edit, build, test, and commit on the
+development environment. Synchronization between the two sides happens through
+Git commits and branches.
 
 ## Safety model
 
@@ -559,57 +575,28 @@ When diverged, automatic resolution is not performed. Follow "Workflow When Push
 
 ## Common Commands
 
-```bash
-# Display help
-git-ssh-sync --help
+| Goal | Command |
+|---|---|
+| Display help | `git-ssh-sync --help` |
+| Register a project | `git-ssh-sync init myproject --origin git@github.com:example/myproject.git --dev-host devserver --dev-user user --dev-path /home/user/work/myproject` |
+| List registered project settings | `git-ssh-sync config list` |
+| Show registered project settings | `git-ssh-sync config show myproject` |
+| Initial clone | `git-ssh-sync clone myproject` |
+| Check synchronization status | `git-ssh-sync status myproject` |
+| Check branch status | `git-ssh-sync branch myproject` |
+| Inspect development work repo status | `git-ssh-sync dev status myproject` |
+| Inspect development work repo diff | `git-ssh-sync dev diff myproject --stat` |
+| Reflect changes from origin to development environment | `git-ssh-sync pull myproject` |
+| Reflect commits from development environment to origin | `git-ssh-sync push myproject` |
+| Switch development environment branch | `git-ssh-sync checkout myproject feature/foo` |
+| Create and switch to a new branch from a base branch | `git-ssh-sync checkout myproject -b feature/foo --base develop` |
+| Diagnostics | `git-ssh-sync doctor myproject` |
+| Diagnose after an interrupted sync | `git-ssh-sync recover myproject` |
+| Apply safe recovery repairs | `git-ssh-sync recover myproject --yes` |
 
-# Register a project
-git-ssh-sync init myproject \
-  --origin git@github.com:example/myproject.git \
-  --dev-host devserver \
-  --dev-user user \
-  --dev-path /home/user/work/myproject
-
-# List registered project settings
-git-ssh-sync config list
-
-# Show registered project settings
-git-ssh-sync config show myproject
-
-# Initial clone
-git-ssh-sync clone myproject
-
-# Check synchronization status
-git-ssh-sync status myproject
-
-# Check branch status
-git-ssh-sync branch myproject
-
-# Inspect development work repo status
-git-ssh-sync dev status myproject
-
-# Inspect development work repo diff
-git-ssh-sync dev diff myproject --stat
-
-# Reflect changes from origin to development environment
-git-ssh-sync pull myproject
-
-# Reflect commits from development environment to origin
-git-ssh-sync push myproject
-
-# Switch development environment branch
-git-ssh-sync checkout myproject feature/foo
-
-# Create and switch to new branch from base branch
-git-ssh-sync checkout myproject -b feature/foo --base develop
-
-# Diagnostics
-git-ssh-sync doctor myproject
-
-# Diagnose and optionally repair after an interrupted sync
-git-ssh-sync recover myproject
-git-ssh-sync recover myproject --yes
-```
+For commands with many options, prefer the full examples in the workflow
+sections above. They are easier to copy safely because each option is shown on
+its own line.
 
 ## Troubleshooting
 

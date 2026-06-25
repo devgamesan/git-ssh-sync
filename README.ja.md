@@ -12,6 +12,26 @@
 
 このツールは、SSH や RDP などの限定されたインバウンド通信のみが許可され、アウトバウンド通信が制限されているニッチな環境（高セキュリティ企業のプロジェクトなど）を対象に設計されています。
 
+## 最初に読むところ
+
+初めて使う場合は、次の順番で読むと全体像をつかみやすくなります。
+
+| 目的 | セクション |
+|---|---|
+| このツールが環境に合うか確認する | [想定ユーザー](#想定ユーザー) |
+| リポジトリ構成を理解する | [アーキテクチャ](#アーキテクチャ) |
+| 最短手順でセットアップする | [クイックスタート](#クイックスタート) |
+| 実プロジェクトを登録する | [設定](#設定) |
+| 日常作業の流れを確認する | [日常開発 workflow](#日常開発-workflow) |
+| 同期停止時に復旧する | [トラブルシューティング](#トラブルシューティング) |
+
+基本的な流れは次のとおりです。
+
+1. ローカルマシンに `git-ssh-sync` をインストールする
+2. `init` でプロジェクトを登録する
+3. `clone` または `attach` で開発環境側のリポジトリを用意する
+4. 編集前に `pull` し、開発環境で commit した後に `push` する
+
 ## 想定ユーザー
 
 `git-ssh-sync` は次のような環境向けです。
@@ -43,11 +63,13 @@ dev work repo
 
 この README では、次の用語を使います。
 
-- `origin`: GitHub / GitLab 側の本来の remote repository
-- `local gateway repo`: ローカルマシン上の中継用 repository
-- `dev bare cache repo`: 開発環境上の bare repository
-- `dev work repo`: 開発環境上で実際に編集、ビルド、テスト、commit する repository
-- `gitsync remote`: dev work repo から dev bare cache repo を参照するための remote
+| 用語 | 意味 |
+|---|---|
+| `origin` | GitHub / GitLab 側の本来の remote repository |
+| `local gateway repo` | ローカルマシン上の中継用 repository |
+| `dev bare cache repo` | 開発環境上の bare repository |
+| `dev work repo` | 開発環境上で実際に編集、ビルド、テスト、commit する repository |
+| `gitsync remote` | dev work repo から dev bare cache repo を参照するための remote |
 
 ## 現在の制限
 
@@ -70,20 +92,14 @@ GitHub / GitLab
 開発環境
 ```
 
-ローカルマシン:
+| 場所 | 前提 |
+|---|---|
+| ローカルマシン | GitHub / GitLab にアクセスでき、開発環境へ SSH 接続でき、`git` と `uv` を利用できる |
+| 開発環境 | ローカルマシンから SSH 接続でき、`git` を利用でき、GitHub / GitLab への直接アクセスは不要 |
 
-- GitHub / GitLab にアクセスできる
-- 開発環境へ SSH 接続できる
-- `git` と `uv` を利用できる
-- `git-ssh-sync` で GitHub / GitLab と開発環境の間のコミット同期、状態確認、診断を行う
-
-開発環境:
-
-- ローカルマシンから SSH 接続できる
-- 開発環境から GitHub / GitLab に直接アクセスできない
-- `git` を利用できる
-- ソース編集、ビルド、テスト、コミットを行う
-- GitHub / GitLab との同期はローカルマシン経由で行う
+`git-ssh-sync` はローカルマシンで実行します。編集、ビルド、テスト、
+コミットは開発環境で行います。両者の同期は Git commit / branch 単位で
+行われます。
 
 ## 安全モデル
 
@@ -554,57 +570,27 @@ git-ssh-sync dev log myproject --max-count 5
 
 ## よく使うコマンド
 
-```bash
-# ヘルプを表示
-git-ssh-sync --help
+| 目的 | コマンド |
+|---|---|
+| ヘルプを表示 | `git-ssh-sync --help` |
+| プロジェクトを登録 | `git-ssh-sync init myproject --origin git@github.com:example/myproject.git --dev-host devserver --dev-user user --dev-path /home/user/work/myproject` |
+| 登録済みプロジェクト設定を一覧表示 | `git-ssh-sync config list` |
+| 登録済みプロジェクト設定を表示 | `git-ssh-sync config show myproject` |
+| 初回 clone | `git-ssh-sync clone myproject` |
+| 同期状態を確認 | `git-ssh-sync status myproject` |
+| ブランチ状態を確認 | `git-ssh-sync branch myproject` |
+| 開発環境 work repo の状態を確認 | `git-ssh-sync dev status myproject` |
+| 開発環境 work repo の差分を確認 | `git-ssh-sync dev diff myproject --stat` |
+| origin の変更を開発環境へ反映 | `git-ssh-sync pull myproject` |
+| 開発環境のコミットを origin へ反映 | `git-ssh-sync push myproject` |
+| 開発環境のブランチを切り替え | `git-ssh-sync checkout myproject feature/foo` |
+| ベースブランチから新規ブランチを作成して切り替え | `git-ssh-sync checkout myproject -b feature/foo --base develop` |
+| 診断 | `git-ssh-sync doctor myproject` |
+| 同期中断後に診断する | `git-ssh-sync recover myproject` |
+| 安全な復旧修復を適用する | `git-ssh-sync recover myproject --yes` |
 
-# プロジェクトを登録
-git-ssh-sync init myproject \
-  --origin git@github.com:example/myproject.git \
-  --dev-host devserver \
-  --dev-user user \
-  --dev-path /home/user/work/myproject
-
-# 登録済みプロジェクト設定を一覧表示
-git-ssh-sync config list
-
-# 登録済みプロジェクト設定を表示
-git-ssh-sync config show myproject
-
-# 初回 clone
-git-ssh-sync clone myproject
-
-# 同期状態を確認
-git-ssh-sync status myproject
-
-# ブランチ状態を確認
-git-ssh-sync branch myproject
-
-# 開発環境 work repo の状態を確認
-git-ssh-sync dev status myproject
-
-# 開発環境 work repo の差分を確認
-git-ssh-sync dev diff myproject --stat
-
-# origin の変更を開発環境へ反映
-git-ssh-sync pull myproject
-
-# 開発環境のコミットを origin へ反映
-git-ssh-sync push myproject
-
-# 開発環境のブランチを切り替え
-git-ssh-sync checkout myproject feature/foo
-
-# ベースブランチから新規ブランチを作成して切り替え
-git-ssh-sync checkout myproject -b feature/foo --base develop
-
-# 診断
-git-ssh-sync doctor myproject
-
-# 同期中断後の診断と安全な修復
-git-ssh-sync recover myproject
-git-ssh-sync recover myproject --yes
-```
+オプションが多いコマンドは、上の workflow セクションにある複数行の例を
+使う方が安全です。各オプションを 1 行ずつ確認しながら実行できます。
 
 ## トラブルシューティング
 
