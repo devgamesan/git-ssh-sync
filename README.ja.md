@@ -12,7 +12,73 @@
 
 このツールは、SSH や RDP などの限定されたインバウンド通信のみが許可され、アウトバウンド通信が制限されているニッチな環境（高セキュリティ企業のプロジェクトなど）を対象に設計されています。
 
+## 最初に読むところ
+
+初めて使う場合は、次の順番で読むと全体像をつかみやすくなります。
+
+| 目的 | セクション |
+|---|---|
+| このツールが環境に合うか確認する | [想定ユーザー](#想定ユーザー) |
+| リポジトリ構成を理解する | [アーキテクチャ](#アーキテクチャ) |
+| 最短手順でセットアップする | [クイックスタート](#クイックスタート) |
+| 実プロジェクトを登録する | [設定](#設定) |
+| 日常作業の流れを確認する | [日常開発 workflow](#日常開発-workflow) |
+| 同期停止時に復旧する | [トラブルシューティング](#トラブルシューティング) |
+
+基本的な流れは次のとおりです。
+
+1. ローカルマシンに `git-ssh-sync` をインストールする
+2. `init` でプロジェクトを登録する
+3. `clone` または `attach` で開発環境側のリポジトリを用意する
+4. 編集前に `pull` し、開発環境で commit した後に `push` する
+
+## 想定ユーザー
+
+`git-ssh-sync` は次のような環境向けです。
+
+- 開発環境から GitHub / GitLab に直接アクセスできない
+- ローカルマシンからは GitHub / GitLab にアクセスできる
+- ローカルマシンから開発環境へ SSH 接続できる
+- 編集、ビルド、テスト、コミットは開発環境で行いたい
+- ファイルコピーではなく Git commit / branch 単位で同期したい
+
+開発環境から GitHub / GitLab に直接アクセスできる通常の Git 環境では、基本的にこのツールは不要です。
+
 このツールはファイル同期ツールではありません。同期するのは Git オブジェクトとブランチです。ソース編集、ビルド、テスト、コミットは開発環境で行い、GitHub / GitLab との通信はローカルマシンで行います。
+
+## アーキテクチャ
+
+`git-ssh-sync` は、GitHub / GitLab へのアクセスをローカルマシンに寄せ、
+Git 作業を開発環境上で行う構成を取ります。
+
+```text
+origin: GitHub / GitLab
+    ↑↓
+local gateway repo
+    ↑↓ git over SSH
+dev bare cache repo
+    ↑↓
+dev work repo
+```
+
+この README では、次の用語を使います。
+
+| 用語 | 意味 |
+|---|---|
+| `origin` | GitHub / GitLab 側の本来の remote repository |
+| `local gateway repo` | ローカルマシン上の中継用 repository |
+| `dev bare cache repo` | 開発環境上の bare repository |
+| `dev work repo` | 開発環境上で実際に編集、ビルド、テスト、commit する repository |
+| `gitsync remote` | dev work repo から dev bare cache repo を参照するための remote |
+
+## 現在の制限
+
+現時点では次の機能には対応していません。
+
+- Git LFS
+- Git submodule
+- 自動コンフリクト解決
+- 未コミット変更の同期
 
 ## 前提
 
@@ -26,20 +92,25 @@ GitHub / GitLab
 開発環境
 ```
 
-ローカルマシン:
+| 場所 | 前提 |
+|---|---|
+| ローカルマシン | GitHub / GitLab にアクセスでき、開発環境へ SSH 接続でき、`git` と `uv` を利用できる |
+| 開発環境 | ローカルマシンから SSH 接続でき、`git` を利用でき、GitHub / GitLab への直接アクセスは不要 |
 
-- GitHub / GitLab にアクセスできる
-- 開発環境へ SSH 接続できる
-- `git` と `uv` を利用できる
-- `git-ssh-sync` で GitHub / GitLab と開発環境の間のコミット同期、状態確認、診断を行う
+`git-ssh-sync` はローカルマシンで実行します。編集、ビルド、テスト、
+コミットは開発環境で行います。両者の同期は Git commit / branch 単位で
+行われます。
 
-開発環境:
+## 安全モデル
 
-- ローカルマシンから SSH 接続できる
-- 開発環境から GitHub / GitLab に直接アクセスできない
-- `git` を利用できる
-- ソース編集、ビルド、テスト、コミットを行う
-- GitHub / GitLab との同期はローカルマシン経由で行う
+`git-ssh-sync` は次のことを行いません。
+
+- 未コミットファイルの同期
+- 自動 merge / 自動 rebase
+- origin への force push
+- dirty な開発環境 work repo の自動変更
+- 開発環境への GitHub / GitLab 認証情報の配置
+- 開発環境から GitHub / GitLab への直接 outbound 接続
 
 ## インストール
 
@@ -60,6 +131,37 @@ uv tool install git+https://github.com/devgamesan/git-ssh-sync.git
 ```bash
 git-ssh-sync --help
 ```
+
+## クイックスタート
+
+`git-ssh-sync` のインストール後、設定から日常同期までの最短手順は次のとおりです。
+
+```bash
+uv tool install git-ssh-sync
+
+git-ssh-sync init myproject \
+  --origin git@github.com:example/myproject.git \
+  --dev-host devserver \
+  --dev-user user \
+  --dev-path /home/user/work/myproject
+
+git-ssh-sync clone myproject
+git-ssh-sync doctor myproject
+
+git-ssh-sync pull myproject
+
+# 開発環境上:
+# cd ~/work/myproject
+# git add .
+# git commit -m "Add feature"
+
+git-ssh-sync status myproject
+git-ssh-sync push myproject
+```
+
+初回セットアップでは `clone` と `doctor` まで実行します。日常作業では、編集前に
+ローカルマシンから `pull` し、開発環境で commit してから、ローカルマシンで
+`status` を確認して `push` します。
 
 ## 設定
 
@@ -214,11 +316,8 @@ git-ssh-sync clone myproject
 git-ssh-sync doctor myproject
 ```
 
-`clone` はローカルマシンに gateway repo を作成し、開発環境に cache repo と work repo を配置します。
-
-- gateway repo: ローカルマシン上にある中継用リポジトリ
-- cache repo: 開発環境上にある bare リポジトリ
-- work repo: 開発環境上で実際に編集、ビルド、テスト、コミットを行うリポジトリ
+`clone` は上記の local gateway repo を作成し、開発環境に dev bare cache repo と
+dev work repo を配置します。
 
 以後、開発環境では work repo を通常の Git リポジトリとして扱えます。
 
@@ -248,6 +347,15 @@ dirty 状態、bare cache repo、`gitsync` remote を検査します。変更前
 ```bash
 git-ssh-sync attach myproject --yes
 ```
+
+初期診断、紐付け修復、同期中断後の復旧入口は、次の表を目安に使い分けます。
+
+| 状況 | 使うコマンド |
+|---|---|
+| 初期設定や接続状態を確認したい | `git-ssh-sync doctor myproject` |
+| `gitsync` remote や cache の紐付けを修復したい | `git-ssh-sync doctor myproject --repair` |
+| `pull` / `push` が途中停止した後に状態確認したい | `git-ssh-sync recover myproject` |
+| 中断後に安全な紐付け修復だけ実行したい | `git-ssh-sync recover myproject --yes` |
 
 `gitsync` remote や cache との紐付けだけが不足・不一致の場合は、
 `doctor --repair` でも同じ preflight check を通して修復できます。
@@ -462,57 +570,202 @@ git-ssh-sync dev log myproject --max-count 5
 
 ## よく使うコマンド
 
-```bash
-# ヘルプを表示
-git-ssh-sync --help
+| 目的 | コマンド |
+|---|---|
+| ヘルプを表示 | `git-ssh-sync --help` |
+| プロジェクトを登録 | `git-ssh-sync init myproject --origin git@github.com:example/myproject.git --dev-host devserver --dev-user user --dev-path /home/user/work/myproject` |
+| 登録済みプロジェクト設定を一覧表示 | `git-ssh-sync config list` |
+| 登録済みプロジェクト設定を表示 | `git-ssh-sync config show myproject` |
+| 初回 clone | `git-ssh-sync clone myproject` |
+| 同期状態を確認 | `git-ssh-sync status myproject` |
+| ブランチ状態を確認 | `git-ssh-sync branch myproject` |
+| 開発環境 work repo の状態を確認 | `git-ssh-sync dev status myproject` |
+| 開発環境 work repo の差分を確認 | `git-ssh-sync dev diff myproject --stat` |
+| origin の変更を開発環境へ反映 | `git-ssh-sync pull myproject` |
+| 開発環境のコミットを origin へ反映 | `git-ssh-sync push myproject` |
+| 開発環境のブランチを切り替え | `git-ssh-sync checkout myproject feature/foo` |
+| ベースブランチから新規ブランチを作成して切り替え | `git-ssh-sync checkout myproject -b feature/foo --base develop` |
+| 診断 | `git-ssh-sync doctor myproject` |
+| 同期中断後に診断する | `git-ssh-sync recover myproject` |
+| 安全な復旧修復を適用する | `git-ssh-sync recover myproject --yes` |
 
-# プロジェクトを登録
+オプションが多いコマンドは、上の workflow セクションにある複数行の例を
+使う方が安全です。各オプションを 1 行ずつ確認しながら実行できます。
+
+## トラブルシューティング
+
+同期が止まった時や現在の状態が分からない時は、まず `status` を使います。
+初期設定、接続、リポジトリの紐付けに問題がありそうな時は `doctor` を使います。
+`pull` / `push` が途中停止した後は `recover` を使います。
+
+### push が止まる
+
+Cause:
+origin に、開発環境ブランチへまだ取り込まれていない commit があるか、
+origin と開発環境ブランチが分岐しています。
+
+Check:
+
+```bash
+git-ssh-sync status myproject
+```
+
+Fix:
+
+```bash
+git-ssh-sync pull myproject
+# pull が fast-forward できない場合は、開発環境で merge または rebase します。
+# 詳細は「push が止まった時の workflow」を参照してください。
+```
+
+### pull が fast-forward できない
+
+Cause:
+origin と開発環境ブランチが分岐しています。`git-ssh-sync` は自動 merge や
+自動 rebase を行いません。
+
+Check:
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync dev status myproject
+```
+
+Fix:
+
+```bash
+# 開発環境で実行
+cd ~/work/myproject
+git fetch gitsync
+git merge gitsync/main
+# または: git rebase gitsync/main
+```
+
+コンフリクト解消後に commit するか rebase を継続したら、ローカルマシンで
+以下を実行します。
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync push myproject
+```
+
+### 開発環境 work repo が dirty
+
+Cause:
+開発環境 work repo に未コミット変更があります。未コミット変更は同期されません。
+修復コマンドも、既存作業の commit、stash、merge、rebase は自動実行しません。
+
+Check:
+
+```bash
+git-ssh-sync dev status myproject
+git-ssh-sync dev diff myproject --stat
+```
+
+Fix:
+
+```bash
+# 開発環境で実行
+cd ~/work/myproject
+git status
+git add <files-to-sync>
+git commit
+```
+
+同期したい変更は commit し、ローカルだけの変更は stash または削除してから
+`pull`、`push`、`attach`、`doctor --repair` を再実行してください。
+
+### gitsync remote が不一致
+
+Cause:
+開発環境 work repo の `gitsync` remote が想定した bare cache repo を指していない、
+または remote / cache の紐付けが不足しています。
+
+Check:
+
+```bash
+git-ssh-sync doctor myproject
+```
+
+Fix:
+
+```bash
+git-ssh-sync doctor myproject --repair
+git-ssh-sync doctor myproject --repair --yes
+```
+
+### cache repo / work repo が既に存在する
+
+Cause:
+`clone` が作成しようとしている開発環境 work repo または bare cache repo のパスが
+既に存在しています。
+
+Check:
+
+```bash
+git-ssh-sync doctor myproject
+```
+
+Fix:
+
+```bash
+git-ssh-sync attach myproject --dev-path /home/user/work/myproject
+git-ssh-sync doctor myproject --repair
+```
+
+既存リポジトリを使う場合は `attach` を使います。そうでない場合は、空のパスを
+指定するか、既存ディレクトリを移動してから `clone` を再実行してください。
+
+### Windows path が壊れる
+
+Cause:
+ローカル shell が Windows パスのバックスラッシュを `git-ssh-sync` に渡す前に
+解釈しているか、開発環境 OS の設定が誤っています。
+
+Check:
+
+```bash
+git-ssh-sync config show myproject
+git-ssh-sync doctor myproject
+```
+
+Fix:
+
+```bash
 git-ssh-sync init myproject \
   --origin git@github.com:example/myproject.git \
   --dev-host devserver \
   --dev-user user \
-  --dev-path /home/user/work/myproject
-
-# 登録済みプロジェクト設定を一覧表示
-git-ssh-sync config list
-
-# 登録済みプロジェクト設定を表示
-git-ssh-sync config show myproject
-
-# 初回 clone
-git-ssh-sync clone myproject
-
-# 同期状態を確認
-git-ssh-sync status myproject
-
-# ブランチ状態を確認
-git-ssh-sync branch myproject
-
-# 開発環境 work repo の状態を確認
-git-ssh-sync dev status myproject
-
-# 開発環境 work repo の差分を確認
-git-ssh-sync dev diff myproject --stat
-
-# origin の変更を開発環境へ反映
-git-ssh-sync pull myproject
-
-# 開発環境のコミットを origin へ反映
-git-ssh-sync push myproject
-
-# 開発環境のブランチを切り替え
-git-ssh-sync checkout myproject feature/foo
-
-# ベースブランチから新規ブランチを作成して切り替え
-git-ssh-sync checkout myproject -b feature/foo --base develop
-
-# 診断
-git-ssh-sync doctor myproject
-
-# 同期中断後の診断と安全な修復
-git-ssh-sync recover myproject
-git-ssh-sync recover myproject --yes
+  --dev-os windows \
+  --dev-path 'C:\Users\user\work\myproject'
 ```
+
+macOS や Linux の shell から実行する場合は、バックスラッシュを含む Windows パスを
+quote してください。
+
+### SSH 接続できない
+
+Cause:
+ローカルマシンから開発環境へ SSH 接続できないか、設定済みの host、user、port、
+認証設定が誤っています。
+
+Check:
+
+```bash
+git-ssh-sync doctor myproject
+ssh user@devserver
+```
+
+Fix:
+
+```bash
+git-ssh-sync config show myproject
+# 正しい --dev-host、--dev-user、--dev-port、SSH 認証設定で
+# プロジェクト設定を更新するか、作り直してください。
+```
+
+診断時に実行された SSH / Git コマンドを確認したい場合は、`doctor --debug` または
+`--log-file` を使ってください。
 
 ## ログ出力
 

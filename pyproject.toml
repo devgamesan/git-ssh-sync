@@ -1,6 +1,6 @@
 [project]
 name = "git-ssh-sync"
-version = "0.5.0"
+version = "0.5.1"
 description = "Sync Git commits through a local machine for development environments without direct GitHub or GitLab access."
 readme = "README.md"
 requires-python = ">=3.12"
