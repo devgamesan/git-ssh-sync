@@ -14,6 +14,29 @@ This tool is designed for niche environments where outbound network access is re
 
 This is not a file synchronization tool. It synchronizes Git objects and branches. Source editing, building, testing, and committing are performed in the development environment, while communication with GitHub/GitLab is handled by the local machine.
 
+## Architecture
+
+`git-ssh-sync` keeps GitHub/GitLab access on the local machine and Git work on
+the development environment.
+
+```text
+origin: GitHub / GitLab
+    ↑↓
+local gateway repo
+    ↑↓ git over SSH
+dev bare cache repo
+    ↑↓
+dev work repo
+```
+
+Terms used throughout this document:
+
+- `origin`: Original remote repository on GitHub / GitLab
+- `local gateway repo`: Relay repository on the local machine
+- `dev bare cache repo`: Bare repository on the development environment
+- `dev work repo`: Repository where you edit, build, test, and commit on the development environment
+- `gitsync remote`: Remote in the dev work repo that points to the dev bare cache repo
+
 ## Prerequisites
 
 `git-ssh-sync` assumes the following configuration:
@@ -218,11 +241,8 @@ git-ssh-sync clone myproject
 git-ssh-sync doctor myproject
 ```
 
-`clone` creates a gateway repository on your local machine and deploys cache and work repositories on the development environment.
-
-- Gateway repository: Relay repository on the local machine
-- Cache repository: Bare repository on the development environment
-- Work repository: Repository where actual editing, building, testing, and committing are performed on the development environment
+`clone` creates the local gateway repo and deploys the dev bare cache repo and
+dev work repo described above.
 
 Afterward, the work repository on the development environment can be used as a normal Git repository.
 
