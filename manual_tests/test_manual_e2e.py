@@ -57,6 +57,8 @@ def _run(
         env=env,
         check=False,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
     )
     command_result = CommandResult(
