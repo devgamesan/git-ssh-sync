@@ -580,6 +580,182 @@ git-ssh-sync recover myproject
 git-ssh-sync recover myproject --yes
 ```
 
+## Troubleshooting
+
+Use `status` first when synchronization stops or the current state is unclear.
+Use `doctor` for setup, connectivity, and repository wiring problems. Use
+`recover` after an interrupted `pull` or `push`.
+
+### push stops because origin has new commits
+
+Cause:
+origin has commits that are not included in the development environment branch,
+or origin and the development environment branch have diverged.
+
+Check:
+
+```bash
+git-ssh-sync status myproject
+```
+
+Fix:
+
+```bash
+git-ssh-sync pull myproject
+# If pull cannot fast-forward, merge or rebase in the development environment.
+# See "Workflow When Push Stops" for the detailed recovery flow.
+```
+
+### pull cannot fast-forward
+
+Cause:
+origin and the development environment branch have diverged. `git-ssh-sync`
+does not perform automatic merge or automatic rebase.
+
+Check:
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync dev status myproject
+```
+
+Fix:
+
+```bash
+# On the development environment
+cd ~/work/myproject
+git fetch gitsync
+git merge gitsync/main
+# or: git rebase gitsync/main
+```
+
+After resolving conflicts and committing or continuing the rebase, run:
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync push myproject
+```
+
+### Development work repo is dirty
+
+Cause:
+the development environment work repo has uncommitted changes. Uncommitted
+changes are not synchronized, and repair commands do not commit, stash, merge,
+or rebase them automatically.
+
+Check:
+
+```bash
+git-ssh-sync dev status myproject
+git-ssh-sync dev diff myproject --stat
+```
+
+Fix:
+
+```bash
+# On the development environment
+cd ~/work/myproject
+git status
+git add <files-to-sync>
+git commit
+```
+
+Commit changes that should be synchronized, or stash/remove local-only changes
+before running `pull`, `push`, `attach`, or `doctor --repair` again.
+
+### gitsync remote is missing or mismatched
+
+Cause:
+the `gitsync` remote in the development work repo does not point to the expected
+bare cache repo, or the wiring is missing.
+
+Check:
+
+```bash
+git-ssh-sync doctor myproject
+```
+
+Fix:
+
+```bash
+git-ssh-sync doctor myproject --repair
+git-ssh-sync doctor myproject --repair --yes
+```
+
+### Cache repo or work repo already exists
+
+Cause:
+`clone` was asked to create a development work repo or bare cache repo at a path
+that already exists.
+
+Check:
+
+```bash
+git-ssh-sync doctor myproject
+```
+
+Fix:
+
+```bash
+git-ssh-sync attach myproject --dev-path /home/user/work/myproject
+git-ssh-sync doctor myproject --repair
+```
+
+Use `attach` when the existing repositories are intentional. Otherwise choose an
+empty path or move the existing directory before running `clone` again.
+
+### Windows path is broken
+
+Cause:
+the local shell may consume backslashes in Windows paths before
+`git-ssh-sync` receives them, or the project may be configured with the wrong
+development OS.
+
+Check:
+
+```bash
+git-ssh-sync config show myproject
+git-ssh-sync doctor myproject
+```
+
+Fix:
+
+```bash
+git-ssh-sync init myproject \
+  --origin git@github.com:example/myproject.git \
+  --dev-host devserver \
+  --dev-user user \
+  --dev-os windows \
+  --dev-path 'C:\Users\user\work\myproject'
+```
+
+Quote Windows paths that contain backslashes when running commands from macOS or
+Linux shells.
+
+### SSH connection fails
+
+Cause:
+the local machine cannot connect to the development environment over SSH, or the
+configured host, user, port, or authentication settings are incorrect.
+
+Check:
+
+```bash
+git-ssh-sync doctor myproject
+ssh user@devserver
+```
+
+Fix:
+
+```bash
+git-ssh-sync config show myproject
+# Update the project config or recreate it with the correct --dev-host,
+# --dev-user, --dev-port, and SSH authentication settings.
+```
+
+Run `doctor --debug` or use `--log-file` when you need the exact SSH and Git
+commands used during diagnosis.
+
 ## Logging
 
 `git-ssh-sync` supports detailed logging for troubleshooting and monitoring synchronization operations.
