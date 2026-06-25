@@ -101,6 +101,21 @@ def test_run_git_can_return_nonzero_result_without_check(
     assert result.stderr == "no match\n"
 
 
+def test_remote_can_return_nonzero_result_without_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(command, **kwargs):
+        return CompletedProcess(command, 2, stdout="", stderr="No such remote\n")
+
+    monkeypatch.setattr(git.subprocess, "run", fake_run)
+
+    result = git.remote(["get-url", "origin"], check=False)
+
+    assert result.command == ("git", "remote", "get-url", "origin")
+    assert result.returncode == 2
+    assert result.stderr == "No such remote\n"
+
+
 def test_run_command_replaces_invalid_output_bytes() -> None:
     result = git._run_command(
         [

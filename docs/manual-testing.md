@@ -4,6 +4,47 @@
 
 ローカルマシンは macOS / Linux などの POSIX 環境を前提にします。リモート開発環境は Linux と Windows の 2 パターンを確認します。
 
+## 自動実行
+
+チェックリストの主要フローは、CI には組み込まず、手動 E2E テストとして実行できます。テストは `manual_tests/` に置いているため、通常の `uv run pytest` では実行されません。
+
+実行には、テスト用 origin リポジトリと、SSH 接続可能な Linux または Windows リモート環境が必要です。origin リポジトリには一時ブランチを作成して削除します。リモート環境には一時 work repo と cache repo を作成して削除します。
+
+origin へのアクセスには、ローカルマシンの `git` が通常使用している認証情報を使います。HTTPS の private repository を使う場合は credential helper、SSH URL を使う場合は SSH key など、非対話で `git clone` / `git fetch` / `git push` できる状態にしてください。テスト中の `git-ssh-sync` 設定ファイルは `XDG_CONFIG_HOME` を一時ディレクトリへ向けて隔離しますが、`HOME` は変更しないため、ローカルの Git 認証設定はそのまま使われます。
+
+Linux リモートだけで実行する例:
+
+```bash
+GSS_TEST_ORIGIN_URL=git@github.com:example/manual-test-origin.git \
+GSS_TEST_LINUX_HOST=linux.example.com \
+GSS_TEST_LINUX_USER=devuser \
+uv run pytest manual_tests
+```
+
+Windows リモートだけで実行する例:
+
+```bash
+GSS_TEST_ORIGIN_URL=git@github.com:example/manual-test-origin.git \
+GSS_TEST_WINDOWS_HOST=windows.example.com \
+GSS_TEST_WINDOWS_USER=devuser \
+uv run pytest manual_tests
+```
+
+Linux と Windows の両方を同時に指定すると、両方のリモートに対して同じフローを実行します。
+
+任意で次の環境変数を指定できます。
+
+```text
+GSS_CLI_COMMAND              実行する CLI コマンド。既定値は "uv run git-ssh-sync"
+GSS_TEST_BASE_BRANCH         origin の既定ブランチを検出できない場合の base branch。既定値は main
+GSS_TEST_LINUX_PROJECT       Linux 用 project 名
+GSS_TEST_LINUX_WORK_PATH     Linux リモートの work repo パス
+GSS_TEST_LINUX_CACHE_PATH    Linux リモートの cache repo パス
+GSS_TEST_WINDOWS_PROJECT     Windows 用 project 名
+GSS_TEST_WINDOWS_WORK_PATH   Windows リモートの work repo パス
+GSS_TEST_WINDOWS_CACHE_PATH  Windows リモートの cache repo パス
+```
+
 ## テスト前提
 
 ### 環境

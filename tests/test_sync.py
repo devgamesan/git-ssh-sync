@@ -63,6 +63,8 @@ def test_pull_project_fast_forwards_existing_branch(
 
     def fake_run_git(args, *, cwd=None, check=True, **kwargs):
         calls.append(("run-git", tuple(args), cwd, check))
+        if tuple(args) == ("rev-parse", "refs/remotes/origin/main"):
+            return _result(("git", *args), "origin-sha\n")
         return _result(("git", *args))
 
     def fake_push(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
@@ -200,6 +202,8 @@ def test_pull_project_dry_run_prints_plan_without_mutating_refs(
 
     def fake_run_git(args, *, cwd=None, check=True, **kwargs):
         calls.append(("run-git", tuple(args), cwd, check))
+        if tuple(args) == ("rev-parse", "refs/remotes/origin/main"):
+            return _result(("git", *args), "origin-sha\n")
         return _result(("git", *args))
 
     def fail_push(*args, **kwargs):
@@ -212,6 +216,12 @@ def test_pull_project_dry_run_prints_plan_without_mutating_refs(
         outputs = {
             ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
             ("branch", "--show-current"): "main\n",
+            (
+                "merge-base",
+                "--is-ancestor",
+                "origin-sha",
+                "refs/heads/main",
+            ): "",
         }
         return _result(("ssh", host), outputs.get(tuple(args), ""))
 
@@ -459,9 +469,9 @@ def test_checkout_project_dry_run_prints_plan_without_mutating_refs(
 
     def fake_run_git(args, *, cwd=None, check=True, **kwargs):
         calls.append(("run-git", tuple(args), cwd, check))
-        if tuple(args[:3]) == ("show-ref", "--verify", "--quiet"):
-            branch = str(args[3]).removeprefix("refs/remotes/origin/")
-            return _result(("git", *args), returncode=0 if branch in origin_refs else 1)
+        if tuple(args[:4]) == ("ls-remote", "--exit-code", "--heads", "origin"):
+            branch = str(args[4])
+            return _result(("git", *args), returncode=0 if branch in origin_refs else 2)
         return _result(("git", *args))
 
     def fail_push(*args, **kwargs):
@@ -489,6 +499,12 @@ def test_checkout_project_dry_run_prints_plan_without_mutating_refs(
     assert "Mode: dry-run" in output
     assert "create and track development branch feature/foo" in output
     assert ("run-git", ("fetch", "--dry-run", "origin"), local_path, True) in calls
+    assert (
+        "run-git",
+        ("ls-remote", "--exit-code", "--heads", "origin", "feature/foo"),
+        local_path,
+        False,
+    ) in calls
     assert not any(
         call[0] == "remote-git" and tuple(call[1])[0] in {"fetch", "switch"}
         for call in calls
@@ -721,6 +737,8 @@ def test_push_project_dry_run_prints_plan_without_mutating_refs(
 
     def fake_run_git(args, *, cwd=None, check=True, **kwargs):
         calls.append(("run-git", tuple(args), cwd, check))
+        if tuple(args) == ("rev-parse", "refs/remotes/origin/main"):
+            return _result(("git", *args), "origin-sha\n")
         return _result(("git", *args))
 
     def fail_fetch(*args, **kwargs):
@@ -736,6 +754,12 @@ def test_push_project_dry_run_prints_plan_without_mutating_refs(
         outputs = {
             ("remote", "get-url", "gitsync"): "/home/user/cache repo/myproject.git\n",
             ("branch", "--show-current"): "main\n",
+            (
+                "merge-base",
+                "--is-ancestor",
+                "origin-sha",
+                "refs/heads/main",
+            ): "",
         }
         return _result(("ssh", host), outputs.get(tuple(args), ""))
 
@@ -750,6 +774,11 @@ def test_push_project_dry_run_prints_plan_without_mutating_refs(
     assert "Mode: dry-run" in output
     assert "push dev/main to origin/main" in output
     assert ("run-git", ("fetch", "--dry-run", "origin"), local_path, True) in calls
+    assert (
+        "remote-git",
+        ("merge-base", "--is-ancestor", "origin-sha", "refs/heads/main"),
+        False,
+    ) in calls
     assert not any(call[0] == "push" for call in calls)
 
 
