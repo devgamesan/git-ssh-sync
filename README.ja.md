@@ -289,6 +289,15 @@ dirty 状態、bare cache repo、`gitsync` remote を検査します。変更前
 git-ssh-sync attach myproject --yes
 ```
 
+初期診断、紐付け修復、同期中断後の復旧入口は、次の表を目安に使い分けます。
+
+| 状況 | 使うコマンド |
+|---|---|
+| 初期設定や接続状態を確認したい | `git-ssh-sync doctor myproject` |
+| `gitsync` remote や cache の紐付けを修復したい | `git-ssh-sync doctor myproject --repair` |
+| `pull` / `push` が途中停止した後に状態確認したい | `git-ssh-sync recover myproject` |
+| 中断後に安全な紐付け修復だけ実行したい | `git-ssh-sync recover myproject --yes` |
+
 `gitsync` remote や cache との紐付けだけが不足・不一致の場合は、
 `doctor --repair` でも同じ preflight check を通して修復できます。
 
