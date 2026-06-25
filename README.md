@@ -12,6 +12,18 @@
 
 This tool is designed for niche environments where outbound network access is restricted, such as high-security enterprises and projects that only allow limited inbound communication (e.g., SSH, RDP).
 
+## Who is this for?
+
+Use `git-ssh-sync` if:
+
+- Your development environment cannot access GitHub / GitLab directly.
+- Your local machine can access GitHub / GitLab.
+- Your local machine can SSH into the development environment.
+- You want to edit, build, test, and commit in the development environment.
+- You want to synchronize by Git commits and branches instead of copying files manually.
+
+If your development environment can already access GitHub / GitLab directly, you usually do not need this tool.
+
 This is not a file synchronization tool. It synchronizes Git objects and branches. Source editing, building, testing, and committing are performed in the development environment, while communication with GitHub/GitLab is handled by the local machine.
 
 ## Architecture
