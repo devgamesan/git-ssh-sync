@@ -64,6 +64,17 @@ GitHub / GitLab
 - ソース編集、ビルド、テスト、コミットを行う
 - GitHub / GitLab との同期はローカルマシン経由で行う
 
+## 安全モデル
+
+`git-ssh-sync` は次のことを行いません。
+
+- 未コミットファイルの同期
+- 自動 merge / 自動 rebase
+- origin への force push
+- dirty な開発環境 work repo の自動変更
+- 開発環境への GitHub / GitLab 認証情報の配置
+- 開発環境から GitHub / GitLab への直接 outbound 接続
+
 ## インストール
 
 通常利用では、ローカルマシンに `uv tool install` でインストールして使います。
