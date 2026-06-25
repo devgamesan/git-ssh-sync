@@ -575,6 +575,181 @@ git-ssh-sync recover myproject
 git-ssh-sync recover myproject --yes
 ```
 
+## トラブルシューティング
+
+同期が止まった時や現在の状態が分からない時は、まず `status` を使います。
+初期設定、接続、リポジトリの紐付けに問題がありそうな時は `doctor` を使います。
+`pull` / `push` が途中停止した後は `recover` を使います。
+
+### push が止まる
+
+Cause:
+origin に、開発環境ブランチへまだ取り込まれていない commit があるか、
+origin と開発環境ブランチが分岐しています。
+
+Check:
+
+```bash
+git-ssh-sync status myproject
+```
+
+Fix:
+
+```bash
+git-ssh-sync pull myproject
+# pull が fast-forward できない場合は、開発環境で merge または rebase します。
+# 詳細は「push が止まった時の workflow」を参照してください。
+```
+
+### pull が fast-forward できない
+
+Cause:
+origin と開発環境ブランチが分岐しています。`git-ssh-sync` は自動 merge や
+自動 rebase を行いません。
+
+Check:
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync dev status myproject
+```
+
+Fix:
+
+```bash
+# 開発環境で実行
+cd ~/work/myproject
+git fetch gitsync
+git merge gitsync/main
+# または: git rebase gitsync/main
+```
+
+コンフリクト解消後に commit するか rebase を継続したら、ローカルマシンで
+以下を実行します。
+
+```bash
+git-ssh-sync status myproject
+git-ssh-sync push myproject
+```
+
+### 開発環境 work repo が dirty
+
+Cause:
+開発環境 work repo に未コミット変更があります。未コミット変更は同期されません。
+修復コマンドも、既存作業の commit、stash、merge、rebase は自動実行しません。
+
+Check:
+
+```bash
+git-ssh-sync dev status myproject
+git-ssh-sync dev diff myproject --stat
+```
+
+Fix:
+
+```bash
+# 開発環境で実行
+cd ~/work/myproject
+git status
+git add <files-to-sync>
+git commit
+```
+
+同期したい変更は commit し、ローカルだけの変更は stash または削除してから
+`pull`、`push`、`attach`、`doctor --repair` を再実行してください。
+
+### gitsync remote が不一致
+
+Cause:
+開発環境 work repo の `gitsync` remote が想定した bare cache repo を指していない、
+または remote / cache の紐付けが不足しています。
+
+Check:
+
+```bash
+git-ssh-sync doctor myproject
+```
+
+Fix:
+
+```bash
+git-ssh-sync doctor myproject --repair
+git-ssh-sync doctor myproject --repair --yes
+```
+
+### cache repo / work repo が既に存在する
+
+Cause:
+`clone` が作成しようとしている開発環境 work repo または bare cache repo のパスが
+既に存在しています。
+
+Check:
+
+```bash
+git-ssh-sync doctor myproject
+```
+
+Fix:
+
+```bash
+git-ssh-sync attach myproject --dev-path /home/user/work/myproject
+git-ssh-sync doctor myproject --repair
+```
+
+既存リポジトリを使う場合は `attach` を使います。そうでない場合は、空のパスを
+指定するか、既存ディレクトリを移動してから `clone` を再実行してください。
+
+### Windows path が壊れる
+
+Cause:
+ローカル shell が Windows パスのバックスラッシュを `git-ssh-sync` に渡す前に
+解釈しているか、開発環境 OS の設定が誤っています。
+
+Check:
+
+```bash
+git-ssh-sync config show myproject
+git-ssh-sync doctor myproject
+```
+
+Fix:
+
+```bash
+git-ssh-sync init myproject \
+  --origin git@github.com:example/myproject.git \
+  --dev-host devserver \
+  --dev-user user \
+  --dev-os windows \
+  --dev-path 'C:\Users\user\work\myproject'
+```
+
+macOS や Linux の shell から実行する場合は、バックスラッシュを含む Windows パスを
+quote してください。
+
+### SSH 接続できない
+
+Cause:
+ローカルマシンから開発環境へ SSH 接続できないか、設定済みの host、user、port、
+認証設定が誤っています。
+
+Check:
+
+```bash
+git-ssh-sync doctor myproject
+ssh user@devserver
+```
+
+Fix:
+
+```bash
+git-ssh-sync config show myproject
+# 正しい --dev-host、--dev-user、--dev-port、SSH 認証設定で
+# プロジェクト設定を更新するか、作り直してください。
+```
+
+診断時に実行された SSH / Git コマンドを確認したい場合は、`doctor --debug` または
+`--log-file` を使ってください。
+
 ## ログ出力
 
 `git-ssh-sync` は、トラブルシューティングと同期操作の監視のための詳細なログ出力をサポートしています。
