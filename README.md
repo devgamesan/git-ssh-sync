@@ -64,6 +64,17 @@ Development environment:
 - Performs source editing, building, testing, and committing
 - Synchronizes with GitHub/GitLab via the local machine
 
+## Safety model
+
+`git-ssh-sync` does not:
+
+- Synchronize uncommitted files
+- Automatically merge or rebase branches
+- Force-push to origin
+- Modify a dirty development work tree
+- Require GitHub/GitLab credentials on the development environment
+- Require direct outbound access from the development environment to GitHub/GitLab
+
 ## Installation
 
 For normal use, install on your local machine using `uv tool install`.
