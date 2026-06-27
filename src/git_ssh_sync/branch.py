@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,6 +41,26 @@ class BranchReport:
     rows: tuple[BranchRow, ...]
 
 
+@dataclass(frozen=True)
+class BranchDeletion:
+    """Single branch ref planned for deletion."""
+
+    location: str
+    ref: str
+    command: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class BranchCleanupPlan:
+    """Collected branch cleanup operations for a configured project."""
+
+    project: str
+    branch: str | None
+    mode: str
+    current_branch: str
+    deletions: tuple[BranchDeletion, ...]
+
+
 def _clean_output(value: str) -> str:
     return value.strip()
 
@@ -63,6 +84,27 @@ def _local_origin_branches(local_path: Path) -> set[str]:
         cwd=local_path,
     )
     return _branch_names_from_refs(result.stdout, "refs/remotes/origin/") - {"HEAD"}
+
+
+def _local_dev_branches(local_path: Path) -> set[str]:
+    result = git.run_git(
+        ["for-each-ref", "--format=%(refname)", "refs/remotes/dev"],
+        cwd=local_path,
+    )
+    return _branch_names_from_refs(result.stdout, "refs/remotes/dev/") - {"HEAD"}
+
+
+def _origin_remote_branches(local_path: Path) -> set[str]:
+    result = git.run_git(
+        ["ls-remote", "--heads", "origin"],
+        cwd=local_path,
+    )
+    names: set[str] = set()
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[1].startswith("refs/heads/"):
+            names.add(parts[1].removeprefix("refs/heads/"))
+    return names
 
 
 def _remote_cache_branches(project_config: ProjectConfig) -> set[str]:
@@ -179,6 +221,259 @@ def _ahead(value: int | None) -> str:
     return "-" if value is None else str(value)
 
 
+def _print_cleanup_plan(plan: BranchCleanupPlan, *, dry_run: bool) -> None:
+    mode = "dry-run" if dry_run else "apply"
+    console.print(f"Branch cleanup for [bold]{escape(plan.project)}[/bold]")
+    console.print(f"Mode: {mode}")
+    console.print(f"Current branch: {escape(plan.current_branch)}")
+    if plan.branch is not None:
+        console.print(f"Target branch: {escape(plan.branch)}")
+    console.print()
+
+    if not plan.deletions:
+        console.print("No branch refs to delete.")
+        return
+
+    table = Table(show_header=True)
+    table.add_column("Location", no_wrap=True)
+    table.add_column("Ref")
+    table.add_column("Command")
+    for deletion in plan.deletions:
+        table.add_row(
+            escape(deletion.location),
+            escape(deletion.ref),
+            escape(" ".join(deletion.command)),
+        )
+    console.print(table)
+
+
+def _delete_origin_branch(local_path: Path, branch: str) -> None:
+    git.push("origin", [f":refs/heads/{branch}"], cwd=local_path)
+
+
+def _delete_gateway_ref(local_path: Path, ref: str) -> None:
+    git.run_git(["update-ref", "-d", ref], cwd=local_path)
+
+
+def _delete_remote_branch(
+    project_config: ProjectConfig, repo_path: str, branch: str
+) -> None:
+    ssh.run_remote_git(
+        project_config.dev.host,
+        repo_path,
+        ["branch", "-D", branch],
+        user=project_config.dev.user,
+        remote_os=project_config.dev.os,
+    )
+
+
+def _build_delete_plan(
+    project: str, project_config: ProjectConfig, branch: str
+) -> BranchCleanupPlan:
+    local_path = Path(project_config.local.repo_path)
+    if not local_path.exists():
+        raise BranchError(f"[local] gateway repository does not exist: {local_path}")
+
+    git.fetch("origin", cwd=local_path)
+    current_branch = _remote_current_branch(project_config)
+    if branch == current_branch:
+        raise BranchError(f"Cannot delete the current development branch: {branch}")
+
+    origin_branches = _origin_remote_branches(local_path)
+    gateway_origin_branches = _local_origin_branches(local_path)
+    gateway_dev_branches = _local_dev_branches(local_path)
+    cache_branches = _remote_cache_branches(project_config)
+    work_branches = _remote_work_branches(project_config)
+
+    deletions: list[BranchDeletion] = []
+    if branch in origin_branches:
+        deletions.append(
+            BranchDeletion(
+                location="origin",
+                ref=f"refs/heads/{branch}",
+                command=("git", "push", "origin", f":refs/heads/{branch}"),
+            )
+        )
+    if branch in cache_branches:
+        deletions.append(
+            BranchDeletion(
+                location="dev cache",
+                ref=f"refs/heads/{branch}",
+                command=(
+                    "git",
+                    "-C",
+                    project_config.dev.cache_path,
+                    "branch",
+                    "-D",
+                    branch,
+                ),
+            )
+        )
+    if branch in work_branches:
+        deletions.append(
+            BranchDeletion(
+                location="work repo",
+                ref=f"refs/heads/{branch}",
+                command=(
+                    "git",
+                    "-C",
+                    project_config.dev.work_path,
+                    "branch",
+                    "-D",
+                    branch,
+                ),
+            )
+        )
+    if branch in gateway_origin_branches:
+        ref = f"refs/remotes/origin/{branch}"
+        deletions.append(
+            BranchDeletion(
+                location="gateway origin ref",
+                ref=ref,
+                command=("git", "update-ref", "-d", ref),
+            )
+        )
+    if branch in gateway_dev_branches:
+        ref = f"refs/remotes/dev/{branch}"
+        deletions.append(
+            BranchDeletion(
+                location="gateway dev ref",
+                ref=ref,
+                command=("git", "update-ref", "-d", ref),
+            )
+        )
+
+    if not deletions:
+        raise BranchError(f"No branch refs found for deletion: {branch}")
+
+    return BranchCleanupPlan(
+        project=project,
+        branch=branch,
+        mode="delete",
+        current_branch=current_branch,
+        deletions=tuple(deletions),
+    )
+
+
+def _build_prune_plan(project: str, project_config: ProjectConfig) -> BranchCleanupPlan:
+    local_path = Path(project_config.local.repo_path)
+    if not local_path.exists():
+        raise BranchError(f"[local] gateway repository does not exist: {local_path}")
+
+    git.fetch("origin", cwd=local_path)
+    current_branch = _remote_current_branch(project_config)
+    origin_branches = _origin_remote_branches(local_path)
+    gateway_origin_branches = _local_origin_branches(local_path)
+    gateway_dev_branches = _local_dev_branches(local_path)
+    cache_branches = _remote_cache_branches(project_config)
+    work_branches = _remote_work_branches(project_config)
+
+    stale_cache_branches = cache_branches - origin_branches - {current_branch}
+    stale_work_branches = work_branches - origin_branches - {current_branch}
+    stale_gateway_origin_branches = (
+        gateway_origin_branches - origin_branches - {current_branch}
+    )
+    stale_gateway_dev_branches = (
+        gateway_dev_branches - origin_branches - {current_branch}
+    )
+
+    deletions: list[BranchDeletion] = []
+    for branch in sorted(stale_cache_branches):
+        deletions.append(
+            BranchDeletion(
+                location="dev cache",
+                ref=f"refs/heads/{branch}",
+                command=(
+                    "git",
+                    "-C",
+                    project_config.dev.cache_path,
+                    "branch",
+                    "-D",
+                    branch,
+                ),
+            )
+        )
+    for branch in sorted(stale_work_branches):
+        deletions.append(
+            BranchDeletion(
+                location="work repo",
+                ref=f"refs/heads/{branch}",
+                command=(
+                    "git",
+                    "-C",
+                    project_config.dev.work_path,
+                    "branch",
+                    "-D",
+                    branch,
+                ),
+            )
+        )
+    for branch in sorted(stale_gateway_origin_branches):
+        ref = f"refs/remotes/origin/{branch}"
+        deletions.append(
+            BranchDeletion(
+                location="gateway origin ref",
+                ref=ref,
+                command=("git", "update-ref", "-d", ref),
+            )
+        )
+    for branch in sorted(stale_gateway_dev_branches):
+        ref = f"refs/remotes/dev/{branch}"
+        deletions.append(
+            BranchDeletion(
+                location="gateway dev ref",
+                ref=ref,
+                command=("git", "update-ref", "-d", ref),
+            )
+        )
+
+    return BranchCleanupPlan(
+        project=project,
+        branch=None,
+        mode="prune",
+        current_branch=current_branch,
+        deletions=tuple(deletions),
+    )
+
+
+def _apply_cleanup_plan(plan: BranchCleanupPlan, project_config: ProjectConfig) -> None:
+    local_path = Path(project_config.local.repo_path)
+    for deletion in plan.deletions:
+        if deletion.location == "origin":
+            branch = deletion.ref.removeprefix("refs/heads/")
+            _delete_origin_branch(local_path, branch)
+        elif deletion.location == "dev cache":
+            branch = deletion.ref.removeprefix("refs/heads/")
+            _delete_remote_branch(project_config, project_config.dev.cache_path, branch)
+        elif deletion.location == "work repo":
+            branch = deletion.ref.removeprefix("refs/heads/")
+            _delete_remote_branch(project_config, project_config.dev.work_path, branch)
+        elif deletion.location in {"gateway origin ref", "gateway dev ref"}:
+            _delete_gateway_ref(local_path, deletion.ref)
+        else:
+            raise BranchError(f"Unexpected deletion location: {deletion.location}")
+
+
+def _cleanup_project(
+    project: str,
+    plan: BranchCleanupPlan,
+    project_config: ProjectConfig,
+    *,
+    yes: bool,
+    dry_run: bool,
+    confirm: Callable[[str], bool] | None,
+) -> None:
+    _print_cleanup_plan(plan, dry_run=dry_run)
+    if dry_run or not plan.deletions:
+        return
+    if not yes:
+        if confirm is None or not confirm("Apply branch cleanup?"):
+            console.print("Aborted.")
+            raise BranchError("Branch cleanup aborted.")
+    _apply_cleanup_plan(plan, project_config)
+    console.print(f"Project '{escape(project)}' branch cleanup completed.")
+
+
 def print_branch(report: BranchReport) -> None:
     """Print a Rich-formatted branch report."""
     console.print(f"Branches for [bold]{escape(report.project)}[/bold]")
@@ -210,3 +505,46 @@ def print_branch(report: BranchReport) -> None:
 def branch_project(project: str) -> None:
     """Inspect and print branch state for a configured project."""
     print_branch(inspect_branch(project))
+
+
+def branch_delete_project(
+    project: str,
+    branch: str,
+    *,
+    yes: bool = False,
+    dry_run: bool = False,
+    confirm: Callable[[str], bool] | None = None,
+) -> None:
+    """Delete one branch across origin, cache, work repo, and gateway refs."""
+    app_config = load_config()
+    project_config = get_project(app_config, project)
+    plan = _build_delete_plan(project, project_config, branch)
+    _cleanup_project(
+        project,
+        plan,
+        project_config,
+        yes=yes,
+        dry_run=dry_run,
+        confirm=confirm,
+    )
+
+
+def branch_prune_project(
+    project: str,
+    *,
+    yes: bool = False,
+    dry_run: bool = False,
+    confirm: Callable[[str], bool] | None = None,
+) -> None:
+    """Prune refs that no longer exist on origin."""
+    app_config = load_config()
+    project_config = get_project(app_config, project)
+    plan = _build_prune_plan(project, project_config)
+    _cleanup_project(
+        project,
+        plan,
+        project_config,
+        yes=yes,
+        dry_run=dry_run,
+        confirm=confirm,
+    )

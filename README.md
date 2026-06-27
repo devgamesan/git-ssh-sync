@@ -541,6 +541,27 @@ To list existence status and ahead/behind for each branch, use `branch`.
 git-ssh-sync branch myproject
 ```
 
+To remove a branch after checking the affected refs, use `branch delete`.
+The command stops if the development work repo is currently on that branch.
+
+```bash
+git-ssh-sync branch delete myproject feature/foo --dry-run
+git-ssh-sync branch delete myproject feature/foo
+git-ssh-sync branch delete myproject feature/foo --yes
+```
+
+To remove cache, work repo, and gateway tracking refs for branches that no longer
+exist on origin, use `branch prune`.
+
+```bash
+git-ssh-sync branch prune myproject --dry-run
+git-ssh-sync branch prune myproject
+```
+
+Branch rename is intentionally not automated yet. Rename a branch with normal Git
+operations, then use `checkout`, `push`, `branch delete`, or `branch prune` to
+bring each repository back into the intended state.
+
 To inspect the development work repo directly from the local machine, use the
 read-only `dev` commands.
 
@@ -584,6 +605,8 @@ When diverged, automatic resolution is not performed. Follow "Workflow When Push
 | Initial clone | `git-ssh-sync clone myproject` |
 | Check synchronization status | `git-ssh-sync status myproject` |
 | Check branch status | `git-ssh-sync branch myproject` |
+| Delete a branch after reviewing affected refs | `git-ssh-sync branch delete myproject feature/foo` |
+| Prune refs for branches missing on origin | `git-ssh-sync branch prune myproject` |
 | Inspect development work repo status | `git-ssh-sync dev status myproject` |
 | Inspect development work repo diff | `git-ssh-sync dev diff myproject --stat` |
 | Reflect changes from origin to development environment | `git-ssh-sync pull myproject` |
