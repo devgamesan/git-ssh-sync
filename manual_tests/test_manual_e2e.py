@@ -487,6 +487,63 @@ def _assert_branch_refs_missing(
     )
 
 
+def _assert_prunable_branch_refs_present(
+    origin_url: str, target: RemoteTarget, gateway_path: Path, branch: str
+) -> None:
+    assert not _origin_branch_exists(origin_url, branch)
+    assert (
+        _remote_git(
+            target,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            f"refs/heads/{branch}",
+            check=False,
+        ).returncode
+        == 0
+    )
+    assert (
+        _remote_git_at(
+            target,
+            target.cache_path,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            f"refs/heads/{branch}",
+            check=False,
+        ).returncode
+        == 0
+    )
+    assert (
+        _run(
+            [
+                "git",
+                "show-ref",
+                "--verify",
+                "--quiet",
+                f"refs/remotes/origin/{branch}",
+            ],
+            cwd=gateway_path,
+            check=False,
+        ).returncode
+        == 0
+    )
+    assert (
+        _run(
+            [
+                "git",
+                "show-ref",
+                "--verify",
+                "--quiet",
+                f"refs/remotes/dev/{branch}",
+            ],
+            cwd=gateway_path,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
 def _assert_cli_failure(
     env: dict[str, str], expected_returncode: int, *args: str
 ) -> CommandResult:
@@ -644,6 +701,7 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
     default_branch = _detect_default_branch(origin_url)
     env = os.environ.copy()
     env["XDG_CONFIG_HOME"] = str(tmp_path / "xdg-config")
+    env.setdefault("COLUMNS", "320")
 
     created_branches: list[str] = []
     created_tags: list[str] = []
@@ -990,6 +1048,9 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
             )
             assert "Mode: dry-run" in prune_dry_run.stdout
             assert prune_branch in prune_dry_run.stdout
+            _assert_prunable_branch_refs_present(
+                origin_url, target, gateway_path, prune_branch
+            )
             _run(
                 _cli_command(env, "branch", "prune", target.project, "--yes"),
                 env=env,
