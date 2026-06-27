@@ -38,7 +38,13 @@ from git_ssh_sync.doctor import DoctorError, doctor_project
 from git_ssh_sync.errors import CommandExecutionError
 from git_ssh_sync.logging_config import setup_logging
 from git_ssh_sync.status import StatusError, status_project
-from git_ssh_sync.sync import SyncError, checkout_project, pull_project, push_project
+from git_ssh_sync.sync import (
+    SyncError,
+    checkout_project,
+    pull_project,
+    push_project,
+    sync_tags_project,
+)
 
 app = typer.Typer(
     name="git-ssh-sync",
@@ -471,6 +477,36 @@ def push_command(
         console.print(f"Project '{project}' push dry-run completed.")
     else:
         console.print(f"Project '{project}' pushed.")
+
+
+@app.command("sync-tags")
+def sync_tags_command(
+    project: Annotated[str, typer.Argument(help="Project name to synchronize tags.")],
+    direction: Annotated[
+        Literal["origin-to-dev", "dev-to-origin"],
+        typer.Option(
+            "--direction",
+            help="Tag sync direction: origin-to-dev or dev-to-origin.",
+        ),
+    ] = "origin-to-dev",
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Show the planned tag sync without changing refs."
+        ),
+    ] = False,
+) -> None:
+    """Synchronize Git tags without deleting or overwriting existing tags."""
+    try:
+        sync_tags_project(project, direction=direction, dry_run=dry_run)
+    except (ConfigError, SyncError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+    if dry_run:
+        console.print(f"Project '{project}' tag sync dry-run completed.")
+    else:
+        console.print(f"Project '{project}' tags synchronized.")
 
 
 @app.command("checkout")

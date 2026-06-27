@@ -273,7 +273,7 @@ Main fields:
 - `dev.host`, `dev.user`, `dev.os`: SSH connection target and remote OS
 - `dev.work_path`: Work repository path on the development environment
 - `dev.cache_path`: Bare cache repository path on the development environment
-- `options.sync_tags`: Synchronize Git tags when pulling or pushing
+- `options.sync_tags`: Enable explicit Git tag synchronization
 - `options.lfs`: Reserved option for Git LFS support
 - `options.submodules`: Reserved option for submodule support
 - `options.ff_only`: Keep synchronization fast-forward only
@@ -439,6 +439,35 @@ Use `--dry-run` to inspect the planned operations and preflight checks before ch
 git-ssh-sync pull myproject --dry-run
 git-ssh-sync push myproject --dry-run
 ```
+
+## Tag Synchronization Workflow
+
+Tags are synchronized explicitly so release refs are not changed during normal
+branch `pull` / `push` operations. `sync-tags` only creates missing tags. It
+stops when an existing tag name points to a different object, and it does not
+delete, overwrite, or force-update tags.
+
+To bring release tags from origin into the development environment:
+
+```bash
+git-ssh-sync sync-tags myproject --dry-run
+git-ssh-sync sync-tags myproject
+```
+
+To publish tags created in the development work repository back to origin:
+
+```bash
+git-ssh-sync sync-tags myproject --direction dev-to-origin --dry-run
+git-ssh-sync sync-tags myproject --direction dev-to-origin
+```
+
+Recommended release flow:
+
+1. Run `git-ssh-sync pull myproject` before release work.
+2. Create the release tag in the development work repository.
+3. Run `git-ssh-sync sync-tags myproject --direction dev-to-origin --dry-run`.
+4. If the dry-run reports only the intended new tag, run the command without
+   `--dry-run`.
 
 ## Workflow When Push Stops
 
