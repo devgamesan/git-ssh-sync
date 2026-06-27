@@ -410,6 +410,71 @@ def _delete_origin_branch(origin_url: str, branch: str) -> None:
     _run(["git", "push", origin_url, "--delete", branch], check=False)
 
 
+def _origin_branch_exists(origin_url: str, branch: str) -> bool:
+    result = _run(
+        ["git", "ls-remote", "--exit-code", "--heads", origin_url, branch],
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _assert_branch_refs_missing(
+    origin_url: str, target: RemoteTarget, gateway_path: Path, branch: str
+) -> None:
+    assert not _origin_branch_exists(origin_url, branch)
+    assert (
+        _remote_git(
+            target,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            f"refs/heads/{branch}",
+            check=False,
+        ).returncode
+        != 0
+    )
+    assert (
+        _remote_git_at(
+            target,
+            target.cache_path,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            f"refs/heads/{branch}",
+            check=False,
+        ).returncode
+        != 0
+    )
+    assert (
+        _run(
+            [
+                "git",
+                "show-ref",
+                "--verify",
+                "--quiet",
+                f"refs/remotes/origin/{branch}",
+            ],
+            cwd=gateway_path,
+            check=False,
+        ).returncode
+        != 0
+    )
+    assert (
+        _run(
+            [
+                "git",
+                "show-ref",
+                "--verify",
+                "--quiet",
+                f"refs/remotes/dev/{branch}",
+            ],
+            cwd=gateway_path,
+            check=False,
+        ).returncode
+        != 0
+    )
+
+
 def _assert_cli_failure(
     env: dict[str, str], expected_returncode: int, *args: str
 ) -> CommandResult:
@@ -659,6 +724,7 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
             )
             assert log_file.exists()
 
+            gateway_path = tmp_path / f"gateway-{target.project}"
             branch = f"manual/{run_id}/{target.name}"
             new_branch = f"manual/{run_id}/{target.name}-new"
             created_branches.extend([branch, new_branch])
@@ -801,6 +867,72 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
             assert "--base can only be used with -b/--create-branch." in (
                 invalid_checkout.stdout + invalid_checkout.stderr
             )
+
+            delete_branch = f"manual/{run_id}/{target.name}-delete"
+            prune_branch = f"manual/{run_id}/{target.name}-prune"
+            created_branches.extend([delete_branch, prune_branch])
+
+            _run(_cli_command(env, "checkout", target.project, branch), env=env)
+            _run(["git", "switch", "-c", delete_branch, branch], cwd=origin_repo)
+            _origin_commit_and_push(
+                origin_repo,
+                delete_branch,
+                f"{target.name}-delete.txt",
+                f"{target.name} delete branch",
+                f"Add {target.name} delete branch",
+            )
+            _run(_cli_command(env, "checkout", target.project, delete_branch), env=env)
+            _run(_cli_command(env, "checkout", target.project, branch), env=env)
+            delete_dry_run = _run(
+                _cli_command(
+                    env,
+                    "branch",
+                    "delete",
+                    target.project,
+                    delete_branch,
+                    "--dry-run",
+                ),
+                env=env,
+            )
+            assert "Mode: dry-run" in delete_dry_run.stdout
+            assert delete_branch in delete_dry_run.stdout
+            assert _origin_branch_exists(origin_url, delete_branch)
+            _run(
+                _cli_command(
+                    env,
+                    "branch",
+                    "delete",
+                    target.project,
+                    delete_branch,
+                    "--yes",
+                ),
+                env=env,
+            )
+            _assert_branch_refs_missing(origin_url, target, gateway_path, delete_branch)
+
+            _run(["git", "switch", "-c", prune_branch, branch], cwd=origin_repo)
+            _origin_commit_and_push(
+                origin_repo,
+                prune_branch,
+                f"{target.name}-prune.txt",
+                f"{target.name} prune branch",
+                f"Add {target.name} prune branch",
+            )
+            _run(_cli_command(env, "checkout", target.project, prune_branch), env=env)
+            _run(_cli_command(env, "checkout", target.project, branch), env=env)
+            _delete_origin_branch(origin_url, prune_branch)
+            assert not _origin_branch_exists(origin_url, prune_branch)
+            prune_dry_run = _run(
+                _cli_command(env, "branch", "prune", target.project, "--dry-run"),
+                env=env,
+            )
+            assert "Mode: dry-run" in prune_dry_run.stdout
+            assert prune_branch in prune_dry_run.stdout
+            _run(
+                _cli_command(env, "branch", "prune", target.project, "--yes"),
+                env=env,
+            )
+            _assert_branch_refs_missing(origin_url, target, gateway_path, prune_branch)
 
             _run(
                 _cli_command(env, "doctor", target.project, "--repair", "--yes"),

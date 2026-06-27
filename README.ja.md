@@ -536,6 +536,27 @@ git-ssh-sync status myproject
 git-ssh-sync branch myproject
 ```
 
+影響を確認してからブランチを削除するには `branch delete` を使います。
+開発環境 work repo が対象ブランチを checkout 中の場合、このコマンドは停止します。
+
+```bash
+git-ssh-sync branch delete myproject feature/foo --dry-run
+git-ssh-sync branch delete myproject feature/foo
+git-ssh-sync branch delete myproject feature/foo --yes
+```
+
+origin に存在しないブランチの cache、work repo、gateway tracking ref を整理するには
+`branch prune` を使います。
+
+```bash
+git-ssh-sync branch prune myproject --dry-run
+git-ssh-sync branch prune myproject
+```
+
+ブランチ rename は現時点では自動化していません。通常の Git 操作で rename した後、
+`checkout`、`push`、`branch delete`、`branch prune` を使って各 repo を意図した
+状態にそろえてください。
+
 ローカルマシンから開発環境 work repo の状態を直接確認するには、参照専用の
 `dev` コマンドを使います。
 
@@ -579,6 +600,8 @@ git-ssh-sync dev log myproject --max-count 5
 | 初回 clone | `git-ssh-sync clone myproject` |
 | 同期状態を確認 | `git-ssh-sync status myproject` |
 | ブランチ状態を確認 | `git-ssh-sync branch myproject` |
+| 影響 ref を確認してブランチを削除 | `git-ssh-sync branch delete myproject feature/foo` |
+| origin にないブランチ ref を整理 | `git-ssh-sync branch prune myproject` |
 | 開発環境 work repo の状態を確認 | `git-ssh-sync dev status myproject` |
 | 開発環境 work repo の差分を確認 | `git-ssh-sync dev diff myproject --stat` |
 | origin の変更を開発環境へ反映 | `git-ssh-sync pull myproject` |

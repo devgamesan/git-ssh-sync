@@ -290,8 +290,7 @@ def test_init_command_creates_project_config(monkeypatch, tmp_path) -> None:
     assert project.dev.os == "windows"
     assert project.dev.work_path == "C:\\Users\\user\\work\\myproject"
     assert (
-        project.dev.cache_path
-        == "C:\\Users\\user\\.git-ssh-sync\\cache\\myproject.git"
+        project.dev.cache_path == "C:\\Users\\user\\.git-ssh-sync\\cache\\myproject.git"
     )
 
 
@@ -317,9 +316,7 @@ def test_init_command_rejects_unquoted_windows_path(monkeypatch, tmp_path) -> No
     )
 
     assert result.exit_code == 1
-    assert "separators were removed by the shell" in " ".join(
-        result.output.split()
-    )
+    assert "separators were removed by the shell" in " ".join(result.output.split())
 
 
 def test_init_command_accepts_windows_path_with_forward_slashes(
@@ -577,6 +574,40 @@ def test_branch_command_runs_branch_workflow(monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert calls == ["myproject"]
+
+
+def test_branch_delete_command_passes_options(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "branch_delete_project",
+        lambda project, branch, *, yes=False, dry_run=False, confirm=None: calls.append(
+            (project, branch, yes, dry_run, confirm is not None)
+        ),
+    )
+
+    result = runner.invoke(
+        app, ["branch", "delete", "myproject", "feature/foo", "--yes", "--dry-run"]
+    )
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", "feature/foo", True, True, True)]
+
+
+def test_branch_prune_command_passes_options(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "branch_prune_project",
+        lambda project, *, yes=False, dry_run=False, confirm=None: calls.append(
+            (project, yes, dry_run, confirm is not None)
+        ),
+    )
+
+    result = runner.invoke(app, ["branch", "prune", "myproject", "--yes"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", True, False, True)]
 
 
 def test_doctor_command_runs_doctor_workflow(monkeypatch) -> None:
