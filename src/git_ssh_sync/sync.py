@@ -280,6 +280,254 @@ def _fetch_dev_branch_to_local(
     )
 
 
+def _parse_tag_refs(output: str) -> dict[str, str]:
+    tags: dict[str, str] = {}
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        object_id, refname = line.split(maxsplit=1)
+        if refname.endswith("^{}"):
+            continue
+        if refname.startswith("refs/tags/"):
+            refname = refname.removeprefix("refs/tags/")
+        tags[refname] = object_id
+    return tags
+
+
+def _list_local_tags(local_path: Path) -> dict[str, str]:
+    result = git.run_git(
+        ["for-each-ref", "refs/tags", "--format=%(objectname) %(refname)"],
+        cwd=local_path,
+    )
+    return _parse_tag_refs(result.stdout)
+
+
+def _list_origin_remote_tags(local_path: Path) -> dict[str, str]:
+    result = git.run_git(["ls-remote", "--tags", "origin"], cwd=local_path)
+    return _parse_tag_refs(result.stdout)
+
+
+def _list_remote_tags(project_config: ProjectConfig, repo_path: str) -> dict[str, str]:
+    result = ssh.run_remote_git(
+        project_config.dev.host,
+        repo_path,
+        ["for-each-ref", "refs/tags", "--format=%(objectname) %(refname)"],
+        user=project_config.dev.user,
+        remote_os=project_config.dev.os,
+    )
+    return _parse_tag_refs(result.stdout)
+
+
+def _format_tag_names(tag_names: list[str]) -> str:
+    if not tag_names:
+        return "(none)"
+    return ", ".join(tag_names)
+
+
+def _ensure_tag_sync_enabled(project: str, project_config: ProjectConfig) -> None:
+    if project_config.options.sync_tags:
+        return
+    raise SyncError(
+        f"Tag synchronization is disabled for project '{project}'.\n\n"
+        "Enable it first:\n\n"
+        f"  git-ssh-sync config set {project} --sync-tags"
+    )
+
+
+def _conflicting_tags(
+    source_tags: dict[str, str], target_tags: dict[str, str]
+) -> list[str]:
+    return sorted(
+        tag
+        for tag, object_id in source_tags.items()
+        if tag in target_tags and target_tags[tag] != object_id
+    )
+
+
+def _ensure_no_tag_conflicts(
+    *,
+    project: str,
+    direction: str,
+    source_label: str,
+    source_tags: dict[str, str],
+    targets: dict[str, dict[str, str]],
+) -> None:
+    conflicts = {
+        label: _conflicting_tags(source_tags, tags) for label, tags in targets.items()
+    }
+    conflicts = {label: tags for label, tags in conflicts.items() if tags}
+    if not conflicts:
+        return
+
+    details = "\n".join(
+        f"  {label}: {_format_tag_names(tags)}" for label, tags in conflicts.items()
+    )
+    raise SyncError(
+        "Cannot synchronize tags because existing tag names point to different objects.\n\n"
+        f"Project:\n  {project}\n\n"
+        f"Direction:\n  {direction}\n\n"
+        f"Source:\n  {source_label}\n\n"
+        "Conflicting tags:\n"
+        f"{details}\n\n"
+        "Resolve the tag mismatch manually. git-ssh-sync does not delete, overwrite, "
+        "or force-update tags."
+    )
+
+
+def _missing_tags(
+    source_tags: dict[str, str], target_tags: dict[str, str]
+) -> list[str]:
+    return sorted(tag for tag in source_tags if tag not in target_tags)
+
+
+def _print_tag_plan(
+    *,
+    project: str,
+    direction: str,
+    dry_run: bool,
+    source_tags: dict[str, str],
+    target_actions: dict[str, list[str]],
+) -> None:
+    console.print(f"Project: {project}")
+    console.print("Refs: tags")
+    console.print(f"Direction: {direction}")
+    if dry_run:
+        console.print("Mode: dry-run")
+    console.print(f"Source tags: {len(source_tags)}")
+    console.print("Tag differences:")
+    for label, tags in target_actions.items():
+        console.print(f"  - {label}: {_format_tag_names(tags)}")
+
+
+def sync_tags_project(
+    project: str,
+    *,
+    direction: str = "origin-to-dev",
+    dry_run: bool = False,
+) -> None:
+    """Synchronize tags without deleting or overwriting existing tag refs."""
+    project_config = _load_project(project)
+    local_path = Path(project_config.local.repo_path)
+
+    _ensure_tag_sync_enabled(project, project_config)
+    _ensure_gateway_repo(local_path)
+    _ensure_gitsync_remote_matches(project, project_config)
+
+    cache_url = _cache_url(
+        host=project_config.dev.host,
+        user=project_config.dev.user,
+        cache_path=project_config.dev.cache_path,
+        remote_os=project_config.dev.os,
+    )
+
+    if direction == "origin-to-dev":
+        source_tags = _list_origin_remote_tags(local_path)
+        gateway_tags = _list_local_tags(local_path)
+        cache_tags = _list_remote_tags(project_config, project_config.dev.cache_path)
+        work_tags = _list_remote_tags(project_config, project_config.dev.work_path)
+        _ensure_no_tag_conflicts(
+            project=project,
+            direction="origin -> development",
+            source_label="origin",
+            source_tags=source_tags,
+            targets={
+                "gateway repository": gateway_tags,
+                "development cache": cache_tags,
+                "development work repo": work_tags,
+            },
+        )
+        tags_to_cache = _missing_tags(source_tags, cache_tags)
+        tags_to_work = _missing_tags(source_tags, work_tags)
+        _print_tag_plan(
+            project=project,
+            direction="origin -> development",
+            dry_run=dry_run,
+            source_tags=source_tags,
+            target_actions={
+                "push to development cache": tags_to_cache,
+                "fetch into development work repo": tags_to_work,
+            },
+        )
+        if dry_run:
+            logger.info(f"Dry-run tag sync completed for project '{project}'")
+            return
+
+        git.fetch("origin", ["--tags"], cwd=local_path)
+        if tags_to_cache:
+            git.push(
+                cache_url,
+                [f"refs/tags/{tag}:refs/tags/{tag}" for tag in tags_to_cache],
+                cwd=local_path,
+                env=ssh.git_ssh_environment(project_config.dev.os),
+            )
+        if tags_to_work:
+            ssh.run_remote_git(
+                project_config.dev.host,
+                project_config.dev.work_path,
+                [
+                    "fetch",
+                    "gitsync",
+                    *[f"refs/tags/{tag}:refs/tags/{tag}" for tag in tags_to_work],
+                ],
+                user=project_config.dev.user,
+                remote_os=project_config.dev.os,
+            )
+        logger.info(f"Successfully synchronized tags for project '{project}'")
+        return
+
+    if direction == "dev-to-origin":
+        source_tags = _list_remote_tags(project_config, project_config.dev.work_path)
+        origin_tags = _list_origin_remote_tags(local_path)
+        gateway_tags = _list_local_tags(local_path)
+        cache_tags = _list_remote_tags(project_config, project_config.dev.cache_path)
+        _ensure_no_tag_conflicts(
+            project=project,
+            direction="development -> origin",
+            source_label="development work repo",
+            source_tags=source_tags,
+            targets={
+                "origin": origin_tags,
+                "gateway repository": gateway_tags,
+                "development cache": cache_tags,
+            },
+        )
+        tags_to_origin = _missing_tags(source_tags, origin_tags)
+        tags_to_gateway = _missing_tags(
+            {tag: source_tags[tag] for tag in tags_to_origin}, gateway_tags
+        )
+        _print_tag_plan(
+            project=project,
+            direction="development -> origin",
+            dry_run=dry_run,
+            source_tags=source_tags,
+            target_actions={
+                "fetch into gateway repository": tags_to_gateway,
+                "push to origin": tags_to_origin,
+            },
+        )
+        if dry_run:
+            logger.info(f"Dry-run tag sync completed for project '{project}'")
+            return
+
+        if tags_to_gateway:
+            git.fetch(
+                _work_url(project_config),
+                [f"refs/tags/{tag}:refs/tags/{tag}" for tag in tags_to_gateway],
+                cwd=local_path,
+                env=ssh.git_ssh_environment(project_config.dev.os),
+            )
+        if tags_to_origin:
+            git.push(
+                "origin",
+                [f"refs/tags/{tag}:refs/tags/{tag}" for tag in tags_to_origin],
+                cwd=local_path,
+            )
+        logger.info(f"Successfully synchronized tags for project '{project}'")
+        return
+
+    raise SyncError(f"Unsupported tag sync direction: {direction}")
+
+
 def _dirty_error(project: str, project_config: ProjectConfig) -> SyncError:
     return SyncError(
         "Error: Development working tree is dirty.\n\n"

@@ -30,6 +30,7 @@ def test_top_level_help() -> None:
         "branch",
         "pull",
         "push",
+        "sync-tags",
         "checkout",
         "doctor",
         "recover",
@@ -55,6 +56,7 @@ def test_subcommand_help() -> None:
         "branch",
         "pull",
         "push",
+        "sync-tags",
         "checkout",
         "doctor",
         "recover",
@@ -808,6 +810,57 @@ def test_push_command_reports_sync_error(monkeypatch) -> None:
 
     assert result.exit_code == 1
     assert "Cannot push main." in result.output
+
+
+def test_sync_tags_command_runs_default_workflow(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "sync_tags_project",
+        lambda project, *, direction="origin-to-dev", dry_run=False: calls.append(
+            (project, direction, dry_run)
+        ),
+    )
+
+    result = runner.invoke(app, ["sync-tags", "myproject"])
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", "origin-to-dev", False)]
+    assert "Project 'myproject' tags synchronized." in result.output
+
+
+def test_sync_tags_command_passes_direction_and_dry_run(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "sync_tags_project",
+        lambda project, *, direction="origin-to-dev", dry_run=False: calls.append(
+            (project, direction, dry_run)
+        ),
+    )
+
+    result = runner.invoke(
+        app,
+        ["sync-tags", "myproject", "--direction", "dev-to-origin", "--dry-run"],
+    )
+
+    assert result.exit_code == 0
+    assert calls == [("myproject", "dev-to-origin", True)]
+    assert "Project 'myproject' tag sync dry-run completed." in result.output
+
+
+def test_sync_tags_command_reports_sync_error(monkeypatch) -> None:
+    def fail(
+        project: str, *, direction: str = "origin-to-dev", dry_run: bool = False
+    ) -> None:
+        raise SyncError("Cannot synchronize tags.")
+
+    monkeypatch.setattr(cli, "sync_tags_project", fail)
+
+    result = runner.invoke(app, ["sync-tags", "myproject"])
+
+    assert result.exit_code == 1
+    assert "Cannot synchronize tags." in result.output
 
 
 def test_checkout_command_runs_checkout_workflow(monkeypatch) -> None:
