@@ -16,15 +16,18 @@ from git_ssh_sync.branch import (
 )
 from git_ssh_sync.clone import CloneError, clone_project
 from git_ssh_sync.config import (
+    build_project_config,
     ConfigError,
     NoConfigUpdateError,
     ProjectAlreadyExistsError,
+    register_project,
     get_project,
     list_project_names,
     default_config_path,
     init_project,
     load_config,
     remove_project,
+    save_config,
     update_project,
 )
 from git_ssh_sync.console import console
@@ -61,6 +64,86 @@ def _version_callback(value: bool) -> None:
     if value:
         console.print(f"git-ssh-sync {__version__}")
         raise typer.Exit()
+
+
+def _prompt_required(label: str, value: str | None = None) -> str:
+    if value is not None:
+        return value
+    return typer.prompt(label)
+
+
+def _prompt_dev_os(default: Literal["posix", "windows"]) -> Literal["posix", "windows"]:
+    while True:
+        value = typer.prompt("Development OS (posix/windows)", default=default)
+        if value in {"posix", "windows"}:
+            return value
+        console.print("[red]Development OS must be 'posix' or 'windows'.[/red]")
+
+
+def _init_project_interactive(
+    project: str,
+    *,
+    origin: str | None,
+    dev_host: str | None,
+    dev_user: str | None,
+    dev_os: Literal["posix", "windows"],
+    dev_work_path: str | None,
+    force: bool,
+) -> None:
+    origin = _prompt_required("Origin Git URL", origin)
+    dev_host = _prompt_required("Development SSH host", dev_host)
+    dev_user = _prompt_required("Development SSH user", dev_user)
+    dev_os = _prompt_dev_os(dev_os)
+    dev_work_path = _prompt_required("Development work path", dev_work_path)
+
+    default_project_config = build_project_config(
+        project,
+        origin=origin,
+        dev_host=dev_host,
+        dev_user=dev_user,
+        dev_os=dev_os,
+        dev_work_path=dev_work_path,
+    )
+    local_repo_path = typer.prompt(
+        "Local gateway repo path", default=default_project_config.local.repo_path
+    )
+    dev_cache_path = typer.prompt(
+        "Development cache repo path", default=default_project_config.dev.cache_path
+    )
+
+    project_config = build_project_config(
+        project,
+        origin=origin,
+        dev_host=dev_host,
+        dev_user=dev_user,
+        dev_os=dev_os,
+        dev_work_path=dev_work_path,
+        local_repo_path=local_repo_path,
+        dev_cache_path=dev_cache_path,
+    )
+
+    config_path = default_config_path()
+    console.print()
+    console.print("Configuration to save:")
+    console.print(f"config path: {config_path}")
+    console.print(f"project: {project}")
+    console.print(f"origin: {project_config.origin}")
+    console.print(f"local gateway repo path: {project_config.local.repo_path}")
+    console.print(f"development host: {project_config.dev.host}")
+    console.print(f"development user: {project_config.dev.user}")
+    console.print(f"development OS: {project_config.dev.os}")
+    console.print(f"development work path: {project_config.dev.work_path}")
+    console.print(f"development cache repo path: {project_config.dev.cache_path}")
+
+    if not typer.confirm("Save this configuration?", default=True):
+        console.print("Configuration not saved.")
+        raise typer.Exit(code=1)
+
+    config = load_config()
+    updated = register_project(config, project, project_config, force=force)
+    save_config(updated)
+    console.print(f"Project '{project}' saved to {config_path}")
+    console.print("Run `git-ssh-sync doctor {}` to check the setup.".format(project))
 
 
 @app.callback()
@@ -301,9 +384,27 @@ def init_command(
         bool,
         typer.Option("--force", help="Overwrite an existing project configuration."),
     ] = False,
+    interactive: Annotated[
+        bool,
+        typer.Option(
+            "--interactive", help="Prompt for setup values before saving config."
+        ),
+    ] = False,
 ) -> None:
     """Create a project configuration."""
     try:
+        if interactive:
+            _init_project_interactive(
+                project,
+                origin=origin,
+                dev_host=dev_host,
+                dev_user=dev_user,
+                dev_os=dev_os,
+                dev_work_path=dev_path,
+                force=force,
+            )
+            return
+
         project_config = init_project(
             project,
             origin=origin,

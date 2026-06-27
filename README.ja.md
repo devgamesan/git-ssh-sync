@@ -167,6 +167,21 @@ git-ssh-sync push myproject
 
 最初に、同期したいプロジェクトを登録します。
 
+初回セットアップでは interactive mode を使うと、必要な値を対話形式で入力できます。
+生成されるデフォルト値を確認し、保存前に確認できます。
+
+```bash
+git-ssh-sync init myproject --interactive
+```
+
+保存後は `doctor` で設定と接続状態を確認します。
+
+```bash
+git-ssh-sync doctor myproject
+```
+
+すべての値をコマンドラインで指定することもできます。
+
 ```bash
 git-ssh-sync init myproject \
   --origin git@github.com:example/myproject.git \

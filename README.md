@@ -167,6 +167,22 @@ run `push` from the local machine.
 
 First, register the project you want to synchronize.
 
+For guided first-time setup, use interactive mode. It prompts for required
+values, shows generated defaults, and asks for confirmation before writing the
+configuration.
+
+```bash
+git-ssh-sync init myproject --interactive
+```
+
+After saving, run `doctor` to check the configuration and connectivity.
+
+```bash
+git-ssh-sync doctor myproject
+```
+
+You can also provide all values non-interactively.
+
 ```bash
 git-ssh-sync init myproject \
   --origin git@github.com:example/myproject.git \
