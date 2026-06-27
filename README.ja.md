@@ -271,7 +271,7 @@ projects:
 - `dev.host`, `dev.user`, `dev.os`: SSH 接続先と開発環境の OS
 - `dev.work_path`: 開発環境上の work repo パス
 - `dev.cache_path`: 開発環境上の bare cache repo パス
-- `options.sync_tags`: pull / push 時に Git tag を同期するかどうか
+- `options.sync_tags`: Git tag の明示同期を有効にするかどうか
 - `options.lfs`: Git LFS 対応用の予約設定
 - `options.submodules`: submodule 対応用の予約設定
 - `options.ff_only`: fast-forward のみで同期するかどうか
@@ -435,6 +435,31 @@ git-ssh-sync pull myproject --dry-run
 git-ssh-sync push myproject --dry-run
 ```
 
+## タグ同期 workflow
+
+タグは通常のブランチ `pull` / `push` では変更せず、リリース用 ref として明示的に同期します。`sync-tags` は不足しているタグだけを作成します。既存の同名タグが異なる object を指している場合は停止し、タグ削除・上書き・force update は行いません。
+
+origin のリリースタグを開発環境へ取り込む場合:
+
+```bash
+git-ssh-sync sync-tags myproject --dry-run
+git-ssh-sync sync-tags myproject
+```
+
+開発環境の work repo で作成したタグを origin へ公開する場合:
+
+```bash
+git-ssh-sync sync-tags myproject --direction dev-to-origin --dry-run
+git-ssh-sync sync-tags myproject --direction dev-to-origin
+```
+
+推奨するリリース手順:
+
+1. リリース作業前に `git-ssh-sync pull myproject` を実行する。
+2. 開発環境の work repo でリリースタグを作成する。
+3. `git-ssh-sync sync-tags myproject --direction dev-to-origin --dry-run` を実行する。
+4. dry-run に意図した新規タグだけが表示されることを確認し、`--dry-run` なしで実行する。
+
 ## push が止まった時の workflow
 
 `push` は origin 側のブランチが開発環境側のブランチの祖先である場合だけ実行します。origin に未取得のコミットがある場合や、origin と開発環境が分岐している場合は停止します。
@@ -536,6 +561,27 @@ git-ssh-sync status myproject
 git-ssh-sync branch myproject
 ```
 
+影響を確認してからブランチを削除するには `branch delete` を使います。
+開発環境 work repo が対象ブランチを checkout 中の場合、このコマンドは停止します。
+
+```bash
+git-ssh-sync branch delete myproject feature/foo --dry-run
+git-ssh-sync branch delete myproject feature/foo
+git-ssh-sync branch delete myproject feature/foo --yes
+```
+
+origin に存在しないブランチの cache、work repo、gateway tracking ref を整理するには
+`branch prune` を使います。
+
+```bash
+git-ssh-sync branch prune myproject --dry-run
+git-ssh-sync branch prune myproject
+```
+
+ブランチ rename は現時点では自動化していません。通常の Git 操作で rename した後、
+`checkout`、`push`、`branch delete`、`branch prune` を使って各 repo を意図した
+状態にそろえてください。
+
 ローカルマシンから開発環境 work repo の状態を直接確認するには、参照専用の
 `dev` コマンドを使います。
 
@@ -579,6 +625,8 @@ git-ssh-sync dev log myproject --max-count 5
 | 初回 clone | `git-ssh-sync clone myproject` |
 | 同期状態を確認 | `git-ssh-sync status myproject` |
 | ブランチ状態を確認 | `git-ssh-sync branch myproject` |
+| 影響 ref を確認してブランチを削除 | `git-ssh-sync branch delete myproject feature/foo` |
+| origin にないブランチ ref を整理 | `git-ssh-sync branch prune myproject` |
 | 開発環境 work repo の状態を確認 | `git-ssh-sync dev status myproject` |
 | 開発環境 work repo の差分を確認 | `git-ssh-sync dev diff myproject --stat` |
 | origin の変更を開発環境へ反映 | `git-ssh-sync pull myproject` |
@@ -597,6 +645,7 @@ git-ssh-sync dev log myproject --max-count 5
 同期が止まった時や現在の状態が分からない時は、まず `status` を使います。
 初期設定、接続、リポジトリの紐付けに問題がありそうな時は `doctor` を使います。
 `pull` / `push` が途中停止した後は `recover` を使います。
+詳しい運用手順は [Troubleshooting](docs/troubleshooting.md) を参照してください。
 
 ### push が止まる
 
@@ -848,4 +897,5 @@ uv run pytest
 
 ## 関連ドキュメント
 
+- [Troubleshooting](docs/troubleshooting.md)
 - [仕様書](docs/spec.md)

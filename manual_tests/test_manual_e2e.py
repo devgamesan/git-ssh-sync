@@ -410,6 +410,83 @@ def _delete_origin_branch(origin_url: str, branch: str) -> None:
     _run(["git", "push", origin_url, "--delete", branch], check=False)
 
 
+def _delete_origin_tag(origin_url: str, tag: str) -> None:
+    _run(["git", "push", origin_url, f":refs/tags/{tag}"], check=False)
+
+
+def _origin_branch_exists(origin_url: str, branch: str) -> bool:
+    result = _run(
+        ["git", "ls-remote", "--exit-code", "--heads", origin_url, branch],
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _origin_tag_exists(origin_url: str, tag: str) -> bool:
+    result = _run(
+        ["git", "ls-remote", "--exit-code", "--tags", origin_url, tag],
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _assert_branch_refs_missing(
+    origin_url: str, target: RemoteTarget, gateway_path: Path, branch: str
+) -> None:
+    assert not _origin_branch_exists(origin_url, branch)
+    assert (
+        _remote_git(
+            target,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            f"refs/heads/{branch}",
+            check=False,
+        ).returncode
+        != 0
+    )
+    assert (
+        _remote_git_at(
+            target,
+            target.cache_path,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            f"refs/heads/{branch}",
+            check=False,
+        ).returncode
+        != 0
+    )
+    assert (
+        _run(
+            [
+                "git",
+                "show-ref",
+                "--verify",
+                "--quiet",
+                f"refs/remotes/origin/{branch}",
+            ],
+            cwd=gateway_path,
+            check=False,
+        ).returncode
+        != 0
+    )
+    assert (
+        _run(
+            [
+                "git",
+                "show-ref",
+                "--verify",
+                "--quiet",
+                f"refs/remotes/dev/{branch}",
+            ],
+            cwd=gateway_path,
+            check=False,
+        ).returncode
+        != 0
+    )
+
+
 def _assert_cli_failure(
     env: dict[str, str], expected_returncode: int, *args: str
 ) -> CommandResult:
@@ -569,6 +646,7 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
     env["XDG_CONFIG_HOME"] = str(tmp_path / "xdg-config")
 
     created_branches: list[str] = []
+    created_tags: list[str] = []
     for target in targets:
         _cleanup_remote(target)
 
@@ -659,6 +737,7 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
             )
             assert log_file.exists()
 
+            gateway_path = tmp_path / f"gateway-{target.project}"
             branch = f"manual/{run_id}/{target.name}"
             new_branch = f"manual/{run_id}/{target.name}-new"
             created_branches.extend([branch, new_branch])
@@ -702,6 +781,55 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
             )
             _run(_cli_command(env, "push", target.project, "--dry-run"), env=env)
             _run(_cli_command(env, "push", target.project), env=env)
+
+            origin_tag = f"manual-{run_id}-{target.name}-origin"
+            dev_tag = f"manual-{run_id}-{target.name}-dev"
+            created_tags.extend([origin_tag, dev_tag])
+            _run(["git", "tag", origin_tag], cwd=origin_repo)
+            _run(["git", "push", "origin", f"refs/tags/{origin_tag}"], cwd=origin_repo)
+            origin_tags_dry_run = _run(
+                _cli_command(env, "sync-tags", target.project, "--dry-run"), env=env
+            )
+            assert "Mode: dry-run" in origin_tags_dry_run.stdout
+            assert origin_tag in origin_tags_dry_run.stdout
+            _run(_cli_command(env, "sync-tags", target.project), env=env)
+            assert (
+                _remote_git(
+                    target,
+                    "show-ref",
+                    "--verify",
+                    "--quiet",
+                    f"refs/tags/{origin_tag}",
+                    check=False,
+                ).returncode
+                == 0
+            )
+
+            _remote_git(target, "tag", dev_tag)
+            dev_tags_dry_run = _run(
+                _cli_command(
+                    env,
+                    "sync-tags",
+                    target.project,
+                    "--direction",
+                    "dev-to-origin",
+                    "--dry-run",
+                ),
+                env=env,
+            )
+            assert "Mode: dry-run" in dev_tags_dry_run.stdout
+            assert dev_tag in dev_tags_dry_run.stdout
+            _run(
+                _cli_command(
+                    env,
+                    "sync-tags",
+                    target.project,
+                    "--direction",
+                    "dev-to-origin",
+                ),
+                env=env,
+            )
+            assert _origin_tag_exists(origin_url, dev_tag)
 
             _remote_create_dirty_file(target)
             dirty_status = _run(
@@ -802,6 +930,72 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
                 invalid_checkout.stdout + invalid_checkout.stderr
             )
 
+            delete_branch = f"manual/{run_id}/{target.name}-delete"
+            prune_branch = f"manual/{run_id}/{target.name}-prune"
+            created_branches.extend([delete_branch, prune_branch])
+
+            _run(_cli_command(env, "checkout", target.project, branch), env=env)
+            _run(["git", "switch", "-c", delete_branch, branch], cwd=origin_repo)
+            _origin_commit_and_push(
+                origin_repo,
+                delete_branch,
+                f"{target.name}-delete.txt",
+                f"{target.name} delete branch",
+                f"Add {target.name} delete branch",
+            )
+            _run(_cli_command(env, "checkout", target.project, delete_branch), env=env)
+            _run(_cli_command(env, "checkout", target.project, branch), env=env)
+            delete_dry_run = _run(
+                _cli_command(
+                    env,
+                    "branch",
+                    "delete",
+                    target.project,
+                    delete_branch,
+                    "--dry-run",
+                ),
+                env=env,
+            )
+            assert "Mode: dry-run" in delete_dry_run.stdout
+            assert delete_branch in delete_dry_run.stdout
+            assert _origin_branch_exists(origin_url, delete_branch)
+            _run(
+                _cli_command(
+                    env,
+                    "branch",
+                    "delete",
+                    target.project,
+                    delete_branch,
+                    "--yes",
+                ),
+                env=env,
+            )
+            _assert_branch_refs_missing(origin_url, target, gateway_path, delete_branch)
+
+            _run(["git", "switch", "-c", prune_branch, branch], cwd=origin_repo)
+            _origin_commit_and_push(
+                origin_repo,
+                prune_branch,
+                f"{target.name}-prune.txt",
+                f"{target.name} prune branch",
+                f"Add {target.name} prune branch",
+            )
+            _run(_cli_command(env, "checkout", target.project, prune_branch), env=env)
+            _run(_cli_command(env, "checkout", target.project, branch), env=env)
+            _delete_origin_branch(origin_url, prune_branch)
+            assert not _origin_branch_exists(origin_url, prune_branch)
+            prune_dry_run = _run(
+                _cli_command(env, "branch", "prune", target.project, "--dry-run"),
+                env=env,
+            )
+            assert "Mode: dry-run" in prune_dry_run.stdout
+            assert prune_branch in prune_dry_run.stdout
+            _run(
+                _cli_command(env, "branch", "prune", target.project, "--yes"),
+                env=env,
+            )
+            _assert_branch_refs_missing(origin_url, target, gateway_path, prune_branch)
+
             _run(
                 _cli_command(env, "doctor", target.project, "--repair", "--yes"),
                 env=env,
@@ -815,3 +1009,5 @@ def test_manual_checklist_e2e(tmp_path: Path) -> None:
             _cleanup_remote(target)
         for branch in created_branches:
             _delete_origin_branch(origin_url, branch)
+        for tag in created_tags:
+            _delete_origin_tag(origin_url, tag)

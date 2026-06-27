@@ -782,6 +782,233 @@ def test_push_project_dry_run_prints_plan_without_mutating_refs(
     assert not any(call[0] == "push" for call in calls)
 
 
+def test_sync_tags_origin_to_dev_pushes_missing_tags(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+    calls: list[tuple[str, object]] = []
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+
+    def fake_run_git(args, *, cwd=None, check=True, **kwargs):
+        calls.append(("run-git", tuple(args), cwd, check))
+        if tuple(args) == ("ls-remote", "--tags", "origin"):
+            return _result(
+                ("git", *args),
+                "aaa refs/tags/v1.0.0\nbbb refs/tags/v1.1.0\n",
+            )
+        return _result(("git", *args))
+
+    def fake_fetch(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
+        calls.append(("fetch", remote, tuple(refspecs), cwd))
+        return _result(("git", "fetch"))
+
+    def fake_push(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
+        calls.append(("push", remote, tuple(refspecs), cwd))
+        return _result(("git", "push"))
+
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
+        calls.append(("remote-git", repo_path, tuple(args), check))
+        if tuple(args) == ("remote", "get-url", "gitsync"):
+            return _gitsync_url_result()
+        if repo_path.endswith("myproject.git"):
+            return _result(("ssh", host), "aaa refs/tags/v1.0.0\n")
+        return _result(("ssh", host), "")
+
+    monkeypatch.setattr(sync.git, "run_git", fake_run_git)
+    monkeypatch.setattr(sync.git, "fetch", fake_fetch)
+    monkeypatch.setattr(sync.git, "push", fake_push)
+    monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
+
+    sync.sync_tags_project("myproject")
+
+    cache_url = "ssh://user@devserver/home/user/cache%20repo/myproject.git"
+    assert ("fetch", "origin", ("--tags",), local_path) in calls
+    assert (
+        "push",
+        cache_url,
+        ("refs/tags/v1.1.0:refs/tags/v1.1.0",),
+        local_path,
+    ) in calls
+    assert (
+        "remote-git",
+        "/home/user/work/myproject",
+        (
+            "fetch",
+            "gitsync",
+            "refs/tags/v1.0.0:refs/tags/v1.0.0",
+            "refs/tags/v1.1.0:refs/tags/v1.1.0",
+        ),
+        True,
+    ) in calls
+
+
+def test_sync_tags_dev_to_origin_pushes_missing_tags(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+    calls: list[tuple[str, object]] = []
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+
+    def fake_run_git(args, *, cwd=None, check=True, **kwargs):
+        calls.append(("run-git", tuple(args), cwd, check))
+        if tuple(args) == ("ls-remote", "--tags", "origin"):
+            return _result(("git", *args), "aaa refs/tags/v1.0.0\n")
+        if tuple(args) == (
+            "for-each-ref",
+            "refs/tags",
+            "--format=%(objectname) %(refname)",
+        ):
+            return _result(("git", *args), "aaa refs/tags/v1.0.0\n")
+        return _result(("git", *args))
+
+    def fake_fetch(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
+        calls.append(("fetch", remote, tuple(refspecs), cwd))
+        return _result(("git", "fetch"))
+
+    def fake_push(remote: str = "origin", refspecs=(), *, cwd=None, **kwargs):
+        calls.append(("push", remote, tuple(refspecs), cwd))
+        return _result(("git", "push"))
+
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
+        if tuple(args) == ("remote", "get-url", "gitsync"):
+            return _gitsync_url_result()
+        if repo_path.endswith("myproject.git"):
+            return _result(("ssh", host), "aaa refs/tags/v1.0.0\n")
+        return _result(
+            ("ssh", host),
+            "aaa refs/tags/v1.0.0\nbbb refs/tags/v1.1.0\n",
+        )
+
+    monkeypatch.setattr(sync.git, "run_git", fake_run_git)
+    monkeypatch.setattr(sync.git, "fetch", fake_fetch)
+    monkeypatch.setattr(sync.git, "push", fake_push)
+    monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
+
+    sync.sync_tags_project("myproject", direction="dev-to-origin")
+
+    work_url = "ssh://user@devserver/home/user/work/myproject"
+    assert (
+        "fetch",
+        work_url,
+        ("refs/tags/v1.1.0:refs/tags/v1.1.0",),
+        local_path,
+    ) in calls
+    assert (
+        "push",
+        "origin",
+        ("refs/tags/v1.1.0:refs/tags/v1.1.0",),
+        local_path,
+    ) in calls
+
+
+def test_sync_tags_dry_run_prints_plan_without_mutating_refs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+    monkeypatch.setattr(
+        sync.git,
+        "run_git",
+        lambda args, **kwargs: _result(
+            ("git", *args),
+            "aaa refs/tags/v1.0.0\n",
+        ),
+    )
+    monkeypatch.setattr(
+        sync.git,
+        "fetch",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("dry-run must not fetch refs")
+        ),
+    )
+    monkeypatch.setattr(
+        sync.git,
+        "push",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("dry-run must not push")
+        ),
+    )
+
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
+        if tuple(args) == ("remote", "get-url", "gitsync"):
+            return _gitsync_url_result()
+        return _result(("ssh", host), "")
+
+    monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
+
+    sync.sync_tags_project("myproject", dry_run=True)
+
+    output = capsys.readouterr().out
+    assert "Mode: dry-run" in output
+    assert "push to development cache: v1.0.0" in output
+
+
+def test_sync_tags_stops_on_conflicting_tag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_path = tmp_path / "gateway"
+    local_path.mkdir()
+
+    monkeypatch.setattr(sync, "load_config", lambda: _app_config(local_path))
+    monkeypatch.setattr(
+        sync.git,
+        "run_git",
+        lambda args, **kwargs: _result(("git", *args), "aaa refs/tags/v1.0.0\n"),
+    )
+
+    def fake_run_remote_git(
+        host: str, repo_path: str, args, *, user=None, check=True, **kwargs
+    ):
+        if tuple(args) == ("remote", "get-url", "gitsync"):
+            return _gitsync_url_result()
+        if repo_path == "/home/user/work/myproject":
+            return _result(("ssh", host), "bbb refs/tags/v1.0.0\n")
+        return _result(("ssh", host), "")
+
+    monkeypatch.setattr(sync.ssh, "run_remote_git", fake_run_remote_git)
+
+    with pytest.raises(sync.SyncError) as exc_info:
+        sync.sync_tags_project("myproject")
+
+    message = str(exc_info.value)
+    assert "Cannot synchronize tags" in message
+    assert "v1.0.0" in message
+    assert "does not delete, overwrite, or force-update tags" in message
+
+
+def test_sync_tags_stops_when_tag_sync_disabled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_path = tmp_path / "gateway"
+    config = _project_config(local_path)
+    disabled = ProjectConfig(
+        origin=config.origin,
+        local=config.local,
+        dev=config.dev,
+        options=OptionsConfig(sync_tags=False),
+    )
+    monkeypatch.setattr(
+        sync, "load_config", lambda: AppConfig(projects={"myproject": disabled})
+    )
+
+    with pytest.raises(sync.SyncError) as exc_info:
+        sync.sync_tags_project("myproject")
+
+    assert "Tag synchronization is disabled" in str(exc_info.value)
+
+
 def test_push_project_stops_when_development_head_is_detached(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

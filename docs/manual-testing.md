@@ -970,6 +970,125 @@ uv run git-ssh-sync checkout <linux-project> manual/existing --base main
 
 ```
 
+### ブランチ削除
+
+目的: `branch delete` が削除対象を事前表示し、origin / cache / work repo / gateway tracking ref から対象ブランチを削除できることを確認する。
+
+対象リモート: Linux / Windows
+
+前提:
+
+- origin に `manual/delete` ブランチを作成できる
+- リモートwork repoが `manual/delete` 以外のブランチを checkout している
+- リモートwork repoが clean である
+
+手順:
+
+```bash
+git clone <origin-url> /tmp/git-ssh-sync-branch-delete
+cd /tmp/git-ssh-sync-branch-delete
+git switch -c manual/delete
+printf "delete branch\n" >> branch-delete-test.txt
+git add branch-delete-test.txt
+git commit -m "Add delete branch manual test"
+git push origin manual/delete
+cd -
+
+uv run git-ssh-sync checkout <project> manual/delete
+uv run git-ssh-sync checkout <project> manual/existing
+uv run git-ssh-sync branch delete <project> manual/delete --dry-run
+uv run git-ssh-sync branch delete <project> manual/delete --yes
+uv run git-ssh-sync branch <project>
+! git ls-remote --exit-code --heads <origin-url> manual/delete
+```
+
+期待結果:
+
+- [ ] `branch delete --dry-run` が origin / dev cache / work repo / gateway ref の削除予定を表示する
+- [ ] `branch delete --dry-run` は origin の `manual/delete` を削除しない
+- [ ] `branch delete --yes` が成功する
+- [ ] origin の `manual/delete` が削除される
+- [ ] `branch <project>` に `manual/delete` が残らない
+
+後片付け:
+
+```bash
+rm -rf /tmp/git-ssh-sync-branch-delete
+git push <origin-url> --delete manual/delete || true
+```
+
+結果:
+
+- [ ] Pass
+- [ ] Fail
+- [ ] Skip
+
+メモ:
+
+```text
+実行時は <project> を <linux-project> と <windows-project> に置き換えて両方確認する。
+```
+
+### ブランチ prune
+
+目的: `branch prune` が origin に存在しない branch の cache / work repo / gateway tracking ref を整理できることを確認する。
+
+対象リモート: Linux / Windows
+
+前提:
+
+- origin に `manual/prune` ブランチを作成できる
+- リモートwork repoが `manual/prune` 以外のブランチを checkout している
+- リモートwork repoが clean である
+
+手順:
+
+```bash
+git clone <origin-url> /tmp/git-ssh-sync-branch-prune
+cd /tmp/git-ssh-sync-branch-prune
+git switch -c manual/prune
+printf "prune branch\n" >> branch-prune-test.txt
+git add branch-prune-test.txt
+git commit -m "Add prune branch manual test"
+git push origin manual/prune
+cd -
+
+uv run git-ssh-sync checkout <project> manual/prune
+uv run git-ssh-sync checkout <project> manual/existing
+git push <origin-url> --delete manual/prune
+uv run git-ssh-sync branch prune <project> --dry-run
+uv run git-ssh-sync branch prune <project> --yes
+uv run git-ssh-sync branch <project>
+```
+
+期待結果:
+
+- [ ] `branch prune --dry-run` が dev cache / work repo / gateway ref の削除予定を表示する
+- [ ] `branch prune --dry-run` は cache / work repo / gateway ref を削除しない
+- [ ] `branch prune --yes` が成功する
+- [ ] origin には存在しないが cache / work repo / gateway に残っていた `manual/prune` が整理される
+- [ ] `branch <project>` に `manual/prune` が残らない
+- [ ] origin に存在する他のブランチは削除されない
+
+後片付け:
+
+```bash
+rm -rf /tmp/git-ssh-sync-branch-prune
+git push <origin-url> --delete manual/prune || true
+```
+
+結果:
+
+- [ ] Pass
+- [ ] Fail
+- [ ] Skip
+
+メモ:
+
+```text
+実行時は <project> を <linux-project> と <windows-project> に置き換えて両方確認する。
+```
+
 ## 既存リポジトリ取り込み
 
 ### attach dry-run と attach
@@ -1372,6 +1491,8 @@ git clone <origin-url> /tmp/git-ssh-sync-origin-cleanup
 cd /tmp/git-ssh-sync-origin-cleanup
 git push origin --delete manual/existing || true
 git push origin --delete manual/new-branch || true
+git push origin --delete manual/delete || true
+git push origin --delete manual/prune || true
 cd -
 rm -rf /tmp/git-ssh-sync-origin-cleanup
 ```

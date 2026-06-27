@@ -8,7 +8,12 @@ from rich.table import Table
 
 from git_ssh_sync import __version__
 from git_ssh_sync.attach import AttachError, attach_project
-from git_ssh_sync.branch import BranchError, branch_project
+from git_ssh_sync.branch import (
+    BranchError,
+    branch_delete_project,
+    branch_project,
+    branch_prune_project,
+)
 from git_ssh_sync.clone import CloneError, clone_project
 from git_ssh_sync.config import (
     ConfigError,
@@ -33,7 +38,13 @@ from git_ssh_sync.doctor import DoctorError, doctor_project
 from git_ssh_sync.errors import CommandExecutionError
 from git_ssh_sync.logging_config import setup_logging
 from git_ssh_sync.status import StatusError, status_project
-from git_ssh_sync.sync import SyncError, checkout_project, pull_project, push_project
+from git_ssh_sync.sync import (
+    SyncError,
+    checkout_project,
+    pull_project,
+    push_project,
+    sync_tags_project,
+)
 
 app = typer.Typer(
     name="git-ssh-sync",
@@ -375,11 +386,52 @@ def status_command(
 
 @app.command("branch")
 def branch_command(
-    project: Annotated[str, typer.Argument(help="Project name to inspect.")],
+    project_or_action: Annotated[
+        str,
+        typer.Argument(help="Project name, or delete/prune cleanup action."),
+    ],
+    project: Annotated[str | None, typer.Argument(help="Project name.")] = None,
+    branch: Annotated[str | None, typer.Argument(help="Branch to delete.")] = None,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Apply cleanup without confirmation."),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Show planned cleanup without changing refs."),
+    ] = False,
 ) -> None:
-    """List branch state across origin, development cache, and work repo."""
+    """List or clean branch refs across origin, cache, and work repo."""
     try:
-        branch_project(project)
+        if project_or_action == "delete":
+            if project is None or branch is None:
+                console.print(
+                    "[red]Usage: git-ssh-sync branch delete <project> <branch>[/red]"
+                )
+                raise typer.Exit(code=2)
+            branch_delete_project(
+                project,
+                branch,
+                yes=yes,
+                dry_run=dry_run,
+                confirm=lambda message: typer.confirm(message),
+            )
+            return
+        if project_or_action == "prune":
+            if project is None or branch is not None:
+                console.print("[red]Usage: git-ssh-sync branch prune <project>[/red]")
+                raise typer.Exit(code=2)
+            branch_prune_project(
+                project,
+                yes=yes,
+                dry_run=dry_run,
+                confirm=lambda message: typer.confirm(message),
+            )
+            return
+        if project is not None or branch is not None:
+            console.print("[red]Usage: git-ssh-sync branch <project>[/red]")
+            raise typer.Exit(code=2)
+        branch_project(project_or_action)
     except (ConfigError, BranchError, CommandExecutionError) as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(code=1) from error
@@ -425,6 +477,36 @@ def push_command(
         console.print(f"Project '{project}' push dry-run completed.")
     else:
         console.print(f"Project '{project}' pushed.")
+
+
+@app.command("sync-tags")
+def sync_tags_command(
+    project: Annotated[str, typer.Argument(help="Project name to synchronize tags.")],
+    direction: Annotated[
+        Literal["origin-to-dev", "dev-to-origin"],
+        typer.Option(
+            "--direction",
+            help="Tag sync direction: origin-to-dev or dev-to-origin.",
+        ),
+    ] = "origin-to-dev",
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Show the planned tag sync without changing refs."
+        ),
+    ] = False,
+) -> None:
+    """Synchronize Git tags without deleting or overwriting existing tags."""
+    try:
+        sync_tags_project(project, direction=direction, dry_run=dry_run)
+    except (ConfigError, SyncError, CommandExecutionError) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(code=1) from error
+
+    if dry_run:
+        console.print(f"Project '{project}' tag sync dry-run completed.")
+    else:
+        console.print(f"Project '{project}' tags synchronized.")
 
 
 @app.command("checkout")

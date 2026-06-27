@@ -273,7 +273,7 @@ Main fields:
 - `dev.host`, `dev.user`, `dev.os`: SSH connection target and remote OS
 - `dev.work_path`: Work repository path on the development environment
 - `dev.cache_path`: Bare cache repository path on the development environment
-- `options.sync_tags`: Synchronize Git tags when pulling or pushing
+- `options.sync_tags`: Enable explicit Git tag synchronization
 - `options.lfs`: Reserved option for Git LFS support
 - `options.submodules`: Reserved option for submodule support
 - `options.ff_only`: Keep synchronization fast-forward only
@@ -440,6 +440,35 @@ git-ssh-sync pull myproject --dry-run
 git-ssh-sync push myproject --dry-run
 ```
 
+## Tag Synchronization Workflow
+
+Tags are synchronized explicitly so release refs are not changed during normal
+branch `pull` / `push` operations. `sync-tags` only creates missing tags. It
+stops when an existing tag name points to a different object, and it does not
+delete, overwrite, or force-update tags.
+
+To bring release tags from origin into the development environment:
+
+```bash
+git-ssh-sync sync-tags myproject --dry-run
+git-ssh-sync sync-tags myproject
+```
+
+To publish tags created in the development work repository back to origin:
+
+```bash
+git-ssh-sync sync-tags myproject --direction dev-to-origin --dry-run
+git-ssh-sync sync-tags myproject --direction dev-to-origin
+```
+
+Recommended release flow:
+
+1. Run `git-ssh-sync pull myproject` before release work.
+2. Create the release tag in the development work repository.
+3. Run `git-ssh-sync sync-tags myproject --direction dev-to-origin --dry-run`.
+4. If the dry-run reports only the intended new tag, run the command without
+   `--dry-run`.
+
 ## Workflow When Push Stops
 
 `push` executes only when the branch on the origin side is an ancestor of the branch on the development environment side. It stops when origin has commits that have not been pulled yet, or when origin and the development environment have diverged.
@@ -541,6 +570,27 @@ To list existence status and ahead/behind for each branch, use `branch`.
 git-ssh-sync branch myproject
 ```
 
+To remove a branch after checking the affected refs, use `branch delete`.
+The command stops if the development work repo is currently on that branch.
+
+```bash
+git-ssh-sync branch delete myproject feature/foo --dry-run
+git-ssh-sync branch delete myproject feature/foo
+git-ssh-sync branch delete myproject feature/foo --yes
+```
+
+To remove cache, work repo, and gateway tracking refs for branches that no longer
+exist on origin, use `branch prune`.
+
+```bash
+git-ssh-sync branch prune myproject --dry-run
+git-ssh-sync branch prune myproject
+```
+
+Branch rename is intentionally not automated yet. Rename a branch with normal Git
+operations, then use `checkout`, `push`, `branch delete`, or `branch prune` to
+bring each repository back into the intended state.
+
 To inspect the development work repo directly from the local machine, use the
 read-only `dev` commands.
 
@@ -584,6 +634,8 @@ When diverged, automatic resolution is not performed. Follow "Workflow When Push
 | Initial clone | `git-ssh-sync clone myproject` |
 | Check synchronization status | `git-ssh-sync status myproject` |
 | Check branch status | `git-ssh-sync branch myproject` |
+| Delete a branch after reviewing affected refs | `git-ssh-sync branch delete myproject feature/foo` |
+| Prune refs for branches missing on origin | `git-ssh-sync branch prune myproject` |
 | Inspect development work repo status | `git-ssh-sync dev status myproject` |
 | Inspect development work repo diff | `git-ssh-sync dev diff myproject --stat` |
 | Reflect changes from origin to development environment | `git-ssh-sync pull myproject` |
@@ -603,6 +655,7 @@ its own line.
 Use `status` first when synchronization stops or the current state is unclear.
 Use `doctor` for setup, connectivity, and repository wiring problems. Use
 `recover` after an interrupted `pull` or `push`.
+For a fuller operational guide, see [Troubleshooting](docs/troubleshooting.md).
 
 ### push stops because origin has new commits
 
@@ -855,4 +908,5 @@ uv run pytest
 
 ## Related Documentation
 
+- [Troubleshooting](docs/troubleshooting.md)
 - [Specification](docs/spec.md)
