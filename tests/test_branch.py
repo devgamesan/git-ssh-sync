@@ -53,7 +53,11 @@ def test_branch_delete_stops_when_target_is_current_branch(
     with pytest.raises(branch.BranchError) as exc_info:
         branch.branch_delete_project("myproject", "feature/foo", yes=True)
 
-    assert "Cannot delete the current development branch" in str(exc_info.value)
+    message = str(exc_info.value)
+    assert "Cannot delete the current development branch" in message
+    assert "Recovery:" in message
+    assert "git-ssh-sync checkout myproject <branch>" in message
+    assert "git-ssh-sync branch myproject" in message
 
 
 def test_branch_delete_dry_run_prints_all_matching_refs_without_deleting(
