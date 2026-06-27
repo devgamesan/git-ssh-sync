@@ -32,6 +32,32 @@ Command selection:
 conflicts, force-push, or synchronize uncommitted file changes. Do those actions
 manually in the development environment after inspecting the state.
 
+Some command failures include a `Recovery:` block. Follow those numbered steps
+from the local machine unless the message explicitly says to run a plain `git`
+command in the development environment or local gateway repo.
+
+## Clone stops because a path already exists
+
+Cause:
+`git-ssh-sync clone` found an existing local gateway path, development cache
+path, or development work path. It stops before overwriting existing data.
+
+If the existing repositories should be reused, preview attach wiring:
+
+```bash
+git-ssh-sync attach myproject --dry-run
+```
+
+If the configured path is wrong, update the project configuration instead of
+deleting data:
+
+```bash
+git-ssh-sync config set myproject ...
+```
+
+Only move or delete the existing path when you intentionally want to recreate
+the repositories from scratch.
+
 ## Development work repo is dirty
 
 Cause:

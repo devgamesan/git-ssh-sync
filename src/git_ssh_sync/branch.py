@@ -12,6 +12,7 @@ from rich.table import Table
 from git_ssh_sync import git, ssh
 from git_ssh_sync.config import ProjectConfig, get_project, load_config
 from git_ssh_sync.console import console
+from git_ssh_sync.errors import format_recovery
 from git_ssh_sync.status import _ssh_repo_url
 
 
@@ -129,7 +130,36 @@ def _remote_work_branches(project_config: ProjectConfig) -> set[str]:
     return _branch_names_from_refs(result.stdout, "refs/heads/")
 
 
-def _remote_current_branch(project_config: ProjectConfig) -> str:
+def _detached_head_recovery(project: str) -> str:
+    return format_recovery(
+        f"`git-ssh-sync branch {project}` to inspect branch refs.",
+        f"`git-ssh-sync checkout {project} <branch>` to reattach the development work repo.",
+    )
+
+
+def _missing_gateway_recovery(project: str) -> str:
+    return format_recovery(
+        f"`git-ssh-sync doctor {project}` for a full diagnosis.",
+        f"`git-ssh-sync clone {project}` if the gateway repository needs to be created.",
+        f"`git-ssh-sync config set {project} ...` if the configured local path is wrong.",
+    )
+
+
+def _current_branch_delete_recovery(project: str) -> str:
+    return format_recovery(
+        f"`git-ssh-sync checkout {project} <branch>` to switch to another branch before deletion.",
+        f"`git-ssh-sync branch {project}` to inspect branch refs before deleting.",
+    )
+
+
+def _no_delete_refs_recovery(project: str) -> str:
+    return format_recovery(
+        f"`git-ssh-sync branch {project}` to inspect available refs.",
+        "Check the branch name and try the delete command again.",
+    )
+
+
+def _remote_current_branch(project: str, project_config: ProjectConfig) -> str:
     result = ssh.run_remote_git(
         project_config.dev.host,
         project_config.dev.work_path,
@@ -139,7 +169,10 @@ def _remote_current_branch(project_config: ProjectConfig) -> str:
     )
     branch = _clean_output(result.stdout)
     if not branch:
-        raise BranchError("Development work repository is in detached HEAD state.")
+        raise BranchError(
+            "Development work repository is in detached HEAD state.\n\n"
+            f"{_detached_head_recovery(project)}"
+        )
     return branch
 
 
@@ -169,10 +202,13 @@ def inspect_project_branch(project: str, project_config: ProjectConfig) -> Branc
     """Inspect branch state using an already loaded project configuration."""
     local_path = Path(project_config.local.repo_path)
     if not local_path.exists():
-        raise BranchError(f"[local] gateway repository does not exist: {local_path}")
+        raise BranchError(
+            f"[local] gateway repository does not exist: {local_path}\n\n"
+            f"{_missing_gateway_recovery(project)}"
+        )
 
     git.fetch("origin", cwd=local_path)
-    current_branch = _remote_current_branch(project_config)
+    current_branch = _remote_current_branch(project, project_config)
     origin_branches = _local_origin_branches(local_path)
     cache_branches = _remote_cache_branches(project_config)
     work_branches = _remote_work_branches(project_config)
@@ -272,12 +308,18 @@ def _build_delete_plan(
 ) -> BranchCleanupPlan:
     local_path = Path(project_config.local.repo_path)
     if not local_path.exists():
-        raise BranchError(f"[local] gateway repository does not exist: {local_path}")
+        raise BranchError(
+            f"[local] gateway repository does not exist: {local_path}\n\n"
+            f"{_missing_gateway_recovery(project)}"
+        )
 
     git.fetch("origin", cwd=local_path)
-    current_branch = _remote_current_branch(project_config)
+    current_branch = _remote_current_branch(project, project_config)
     if branch == current_branch:
-        raise BranchError(f"Cannot delete the current development branch: {branch}")
+        raise BranchError(
+            f"Cannot delete the current development branch: {branch}\n\n"
+            f"{_current_branch_delete_recovery(project)}"
+        )
 
     origin_branches = _origin_remote_branches(local_path)
     gateway_origin_branches = _local_origin_branches(local_path)
@@ -344,7 +386,10 @@ def _build_delete_plan(
         )
 
     if not deletions:
-        raise BranchError(f"No branch refs found for deletion: {branch}")
+        raise BranchError(
+            f"No branch refs found for deletion: {branch}\n\n"
+            f"{_no_delete_refs_recovery(project)}"
+        )
 
     return BranchCleanupPlan(
         project=project,
@@ -358,10 +403,13 @@ def _build_delete_plan(
 def _build_prune_plan(project: str, project_config: ProjectConfig) -> BranchCleanupPlan:
     local_path = Path(project_config.local.repo_path)
     if not local_path.exists():
-        raise BranchError(f"[local] gateway repository does not exist: {local_path}")
+        raise BranchError(
+            f"[local] gateway repository does not exist: {local_path}\n\n"
+            f"{_missing_gateway_recovery(project)}"
+        )
 
     git.fetch("origin", cwd=local_path)
-    current_branch = _remote_current_branch(project_config)
+    current_branch = _remote_current_branch(project, project_config)
     origin_branches = _origin_remote_branches(local_path)
     gateway_origin_branches = _local_origin_branches(local_path)
     gateway_dev_branches = _local_dev_branches(local_path)

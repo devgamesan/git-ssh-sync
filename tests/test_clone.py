@@ -382,8 +382,14 @@ def test_clone_project_stops_when_local_path_exists(
     Path(config.projects["myproject"].local.repo_path).mkdir(parents=True)
     monkeypatch.setattr(clone, "load_config", lambda: config)
 
-    with pytest.raises(clone.CloneError, match=r"\[local\] path already exists"):
+    with pytest.raises(clone.CloneError) as exc_info:
         clone.clone_project("myproject")
+
+    message = str(exc_info.value)
+    assert "[local] path already exists" in message
+    assert "Recovery:" in message
+    assert "git-ssh-sync attach myproject --dry-run" in message
+    assert "git-ssh-sync config set myproject" in message
 
 
 def test_clone_project_stops_when_remote_path_exists(
@@ -398,10 +404,13 @@ def test_clone_project_stops_when_remote_path_exists(
         ),
     )
 
-    with pytest.raises(
-        clone.CloneError, match=r"\[ssh:user@devserver\] path already exists"
-    ):
+    with pytest.raises(clone.CloneError) as exc_info:
         clone.clone_project("myproject")
+
+    message = str(exc_info.value)
+    assert "[ssh:user@devserver] path already exists" in message
+    assert "Recovery:" in message
+    assert "git-ssh-sync attach myproject --dry-run" in message
 
 
 def test_clone_project_reports_unexpected_remote_check_failure(

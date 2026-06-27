@@ -298,6 +298,9 @@ def test_pull_project_stops_when_development_head_is_detached(
 
     message = str(exc_info.value)
     assert "detached HEAD" in message
+    assert "Recovery:" in message
+    assert "git-ssh-sync doctor myproject" in message
+    assert "git-ssh-sync checkout myproject <branch>" in message
 
 
 def test_checkout_project_switches_new_branch_from_gitsync(
@@ -607,7 +610,9 @@ def test_checkout_project_stops_when_development_worktree_is_dirty(
     assert "Development working tree is dirty" in message
     assert "branch: main" in message
     assert "commit: abc1234" in message
-    assert "Commit or stash changes first." in message
+    assert "Recovery:" in message
+    assert "git-ssh-sync dev status myproject" in message
+    assert "git-ssh-sync dev diff myproject --stat" in message
 
 
 def test_pull_project_reports_missing_gateway_repo(
@@ -1030,6 +1035,8 @@ def test_push_project_stops_when_development_head_is_detached(
 
     message = str(exc_info.value)
     assert "detached HEAD" in message
+    assert "Recovery:" in message
+    assert "git-ssh-sync checkout myproject <branch>" in message
 
 
 def test_push_project_reports_origin_push_failure(
@@ -1075,3 +1082,6 @@ def test_push_project_reports_origin_push_failure(
     assert "Failed to push main to origin." in message
     assert "Origin push failed:" in message
     assert "remote rejected" in message
+    assert "Recovery:" in message
+    assert "git-ssh-sync pull myproject" in message
+    assert "branch protection" in message

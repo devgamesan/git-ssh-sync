@@ -13,6 +13,13 @@ def format_command(command: Sequence[str]) -> str:
     return shlex.join(str(part) for part in command)
 
 
+def format_recovery(*steps: str) -> str:
+    """Return a terminal-friendly recovery block."""
+    lines = ["Recovery:"]
+    lines.extend(f"  {index}. {step}" for index, step in enumerate(steps, start=1))
+    return "\n".join(lines)
+
+
 @dataclass(frozen=True)
 class CommandExecutionError(RuntimeError):
     """Raised when a local or remote command exits with a non-zero status."""

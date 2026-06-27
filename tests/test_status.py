@@ -149,10 +149,16 @@ def test_inspect_project_status_detects_dirty_lfs_and_submodules(
 
 
 def test_inspect_project_status_reports_missing_gateway_repo(tmp_path: Path) -> None:
-    with pytest.raises(StatusError, match="gateway repository does not exist"):
+    with pytest.raises(StatusError) as exc_info:
         status.inspect_project_status(
             "myproject", _project_config(tmp_path / "missing")
         )
+
+    message = str(exc_info.value)
+    assert "gateway repository does not exist" in message
+    assert "Recovery:" in message
+    assert "git-ssh-sync doctor myproject" in message
+    assert "git-ssh-sync clone myproject" in message
 
 
 def test_print_status_outputs_required_sections(
