@@ -860,8 +860,10 @@ Register each submodule as a separate git-ssh-sync project.
 ## 16.1 言語
 
 ```text
-Python 3.12+
+Python 3.12 / 3.13
 ```
+
+v1.0 では Python 3.12 と 3.13 をサポート対象とし、CI で両方のバージョンを検証する。
 
 ---
 

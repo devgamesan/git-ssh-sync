@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/devgamesan/git-ssh-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/devgamesan/git-ssh-sync/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
+![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg)
 ![Release](https://img.shields.io/github/v/release/devgamesan/git-ssh-sync)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
@@ -96,6 +96,9 @@ Development environment
 |---|---|
 | Local machine | Can access GitHub / GitLab, can SSH to the development environment, and has `git` and `uv` available |
 | Development environment | Can be accessed via SSH from the local machine, has `git` available, and does not need direct GitHub / GitLab access |
+
+For v1.0, `git-ssh-sync` supports Python 3.12 and 3.13. CI runs the full test
+suite on both supported versions.
 
 Run `git-ssh-sync` on the local machine. Edit, build, test, and commit on the
 development environment. Synchronization between the two sides happens through
