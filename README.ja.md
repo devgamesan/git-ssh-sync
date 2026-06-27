@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/devgamesan/git-ssh-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/devgamesan/git-ssh-sync/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
+![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg)
 ![Release](https://img.shields.io/github/v/release/devgamesan/git-ssh-sync)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
@@ -96,6 +96,9 @@ GitHub / GitLab
 |---|---|
 | ローカルマシン | GitHub / GitLab にアクセスでき、開発環境へ SSH 接続でき、`git` と `uv` を利用できる |
 | 開発環境 | ローカルマシンから SSH 接続でき、`git` を利用でき、GitHub / GitLab への直接アクセスは不要 |
+
+v1.0 では Python 3.12 と 3.13 をサポートします。CI では両方の
+サポート対象バージョンでテスト一式を実行します。
 
 `git-ssh-sync` はローカルマシンで実行します。編集、ビルド、テスト、
 コミットは開発環境で行います。両者の同期は Git commit / branch 単位で
