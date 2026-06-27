@@ -645,6 +645,7 @@ git-ssh-sync dev log myproject --max-count 5
 同期が止まった時や現在の状態が分からない時は、まず `status` を使います。
 初期設定、接続、リポジトリの紐付けに問題がありそうな時は `doctor` を使います。
 `pull` / `push` が途中停止した後は `recover` を使います。
+詳しい運用手順は [Troubleshooting](docs/troubleshooting.md) を参照してください。
 
 ### push が止まる
 
@@ -896,4 +897,5 @@ uv run pytest
 
 ## 関連ドキュメント
 
+- [Troubleshooting](docs/troubleshooting.md)
 - [仕様書](docs/spec.md)

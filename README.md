@@ -655,6 +655,7 @@ its own line.
 Use `status` first when synchronization stops or the current state is unclear.
 Use `doctor` for setup, connectivity, and repository wiring problems. Use
 `recover` after an interrupted `pull` or `push`.
+For a fuller operational guide, see [Troubleshooting](docs/troubleshooting.md).
 
 ### push stops because origin has new commits
 
@@ -907,4 +908,5 @@ uv run pytest
 
 ## Related Documentation
 
+- [Troubleshooting](docs/troubleshooting.md)
 - [Specification](docs/spec.md)
