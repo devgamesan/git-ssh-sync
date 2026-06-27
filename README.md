@@ -916,11 +916,15 @@ To execute the CLI during development, you can run it via `uv run`.
 uv run git-ssh-sync --help
 ```
 
-Tests are executed with the following command:
+Run the same checks enforced by CI with the following commands:
 
 ```bash
+uv run ruff check src tests manual_tests
+uv run ruff format --check src tests manual_tests
 uv run pytest
 ```
+
+Ruff currently checks Python source and tests. If future tooling adds support for documentation formats, include docs in the local and CI checks together.
 
 ## Related Documentation
 

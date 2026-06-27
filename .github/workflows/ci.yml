@@ -26,5 +26,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
+      - name: Run Ruff lint
+        run: uv run ruff check src tests manual_tests
+
+      - name: Check Ruff formatting
+        run: uv run ruff format --check src tests manual_tests
+
       - name: Run tests
         run: uv run pytest
