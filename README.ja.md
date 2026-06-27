@@ -904,11 +904,15 @@ uv tool install \
 uv run git-ssh-sync --help
 ```
 
-テストは次のコマンドで実行します。
+CI と同じ確認は次のコマンドで実行します。
 
 ```bash
+uv run ruff check src tests manual_tests
+uv run ruff format --check src tests manual_tests
 uv run pytest
 ```
+
+現在 Ruff の対象は Python ソースとテストです。将来ドキュメント形式に対応した tooling を導入する場合は、ローカル確認と CI の両方に docs を追加します。
 
 ## 関連ドキュメント
 
