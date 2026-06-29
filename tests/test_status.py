@@ -193,7 +193,9 @@ def test_print_status_outputs_required_sections(
     assert "git-ssh-sync push myproject" not in output
     assert "Commit or stash changes" in output
     assert "Git LFS" in output
+    assert "Git LFS object synchronization is not supported by git-ssh-sync" in output
     assert "Git submodules" in output
+    assert "Submodule synchronization is not supported by git-ssh-sync" in output
 
 
 def test_recommendation_includes_required_branch_option(
