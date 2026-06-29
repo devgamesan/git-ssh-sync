@@ -478,6 +478,17 @@ git-ssh-sync sync-tags myproject --direction dev-to-origin
 3. `git-ssh-sync sync-tags myproject --direction dev-to-origin --dry-run` を実行する。
 4. dry-run に意図した新規タグだけが表示されることを確認し、`--dry-run` なしで実行する。
 
+## v1.0 リリースチェックリスト
+
+v1.0 を切る前に、次を確認します。
+
+1. `README.md` と `README.ja.md` が、同じ利用フロー、制限、クイックスタートを説明している。
+2. `docs/troubleshooting.md` が、セットアップと日常同期で遭遇しやすい失敗を扱っている。
+3. `docs/manual-testing.md` が、現在の manual E2E coverage と v1.0 の検証結果を反映している。
+4. 対応 Python バージョンで `uv run ruff check src tests` と `uv run pytest` が通る。
+5. リリースタグを開発環境の work repo で作成し、`git-ssh-sync sync-tags myproject --direction dev-to-origin` で公開する。
+6. release notes や changelog がある場合は、最終的な対応範囲と既知の制限と一致している。
+
 ## push が止まった時の workflow
 
 `push` は origin 側のブランチが開発環境側のブランチの祖先である場合だけ実行します。origin に未取得のコミットがある場合や、origin と開発環境が分岐している場合は停止します。
@@ -664,6 +675,13 @@ git-ssh-sync dev log myproject --max-count 5
 初期設定、接続、リポジトリの紐付けに問題がありそうな時は `doctor` を使います。
 `pull` / `push` が途中停止した後は `recover` を使います。
 詳しい運用手順は [Troubleshooting](docs/troubleshooting.md) を参照してください。
+詳細ガイドには、[dirty な work tree](docs/troubleshooting.md#development-work-repo-is-dirty)、
+[分岐した branch](docs/troubleshooting.md#branch-has-diverged-or-cannot-fast-forward)、
+[SSH 失敗](docs/troubleshooting.md#ssh-connection-fails)、
+[Git 認証と origin アクセス](docs/troubleshooting.md#git-authentication-or-origin-access-fails)、
+[remote の紐付け不整合](docs/troubleshooting.md#gitsync-remote-or-cache-wiring-is-wrong)、
+[LFS / submodule](docs/troubleshooting.md#git-lfs-and-submodules-are-not-supported)、
+[Windows パスの引用](docs/troubleshooting.md#windows-path-is-broken) があります。
 
 ### push が止まる
 

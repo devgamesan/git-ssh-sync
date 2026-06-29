@@ -488,6 +488,17 @@ Recommended release flow:
 4. If the dry-run reports only the intended new tag, run the command without
    `--dry-run`.
 
+## v1.0 Release Checklist
+
+Before cutting a v1.0 release, confirm the following:
+
+1. `README.md` and `README.ja.md` describe the same supported workflows, limitations, and quick-start steps.
+2. `docs/troubleshooting.md` covers the common failure modes users are likely to hit during setup and daily sync.
+3. `docs/manual-testing.md` still reflects the current manual E2E coverage and any recorded v1.0 verification results.
+4. `uv run ruff check src tests` and `uv run pytest` pass on the supported Python versions.
+5. The release tag is created in the development work repository, then published with `git-ssh-sync sync-tags myproject --direction dev-to-origin`.
+6. The release notes or changelog, if present, match the final supported scope and known limitations.
+
 ## Workflow When Push Stops
 
 `push` executes only when the branch on the origin side is an ancestor of the branch on the development environment side. It stops when origin has commits that have not been pulled yet, or when origin and the development environment have diverged.
@@ -675,6 +686,13 @@ Use `status` first when synchronization stops or the current state is unclear.
 Use `doctor` for setup, connectivity, and repository wiring problems. Use
 `recover` after an interrupted `pull` or `push`.
 For a fuller operational guide, see [Troubleshooting](docs/troubleshooting.md).
+The detailed guide covers [dirty work trees](docs/troubleshooting.md#development-work-repo-is-dirty),
+[diverged branches](docs/troubleshooting.md#branch-has-diverged-or-cannot-fast-forward),
+[SSH failures](docs/troubleshooting.md#ssh-connection-fails),
+[Git authentication and origin access](docs/troubleshooting.md#git-authentication-or-origin-access-fails),
+[remote wiring issues](docs/troubleshooting.md#gitsync-remote-or-cache-wiring-is-wrong),
+[LFS and submodules](docs/troubleshooting.md#git-lfs-and-submodules-are-not-supported),
+and [Windows path quoting](docs/troubleshooting.md#windows-path-is-broken).
 
 ### push stops because origin has new commits
 
