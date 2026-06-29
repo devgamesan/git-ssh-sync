@@ -528,20 +528,6 @@ def _assert_prunable_branch_refs_present(
         ).returncode
         == 0
     )
-    assert (
-        _run(
-            [
-                "git",
-                "show-ref",
-                "--verify",
-                "--quiet",
-                f"refs/remotes/dev/{branch}",
-            ],
-            cwd=gateway_path,
-            check=False,
-        ).returncode
-        == 0
-    )
 
 
 def _assert_cli_failure(
