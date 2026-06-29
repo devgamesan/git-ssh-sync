@@ -223,11 +223,11 @@ values. After connectivity works, run:
 git-ssh-sync doctor myproject
 ```
 
-## Origin fetch fails
+## Git authentication or origin access fails
 
 Cause:
-the local machine cannot fetch from origin, origin is unavailable, the URL is
-wrong, or credentials do not allow read access.
+the local machine cannot authenticate to origin, origin is unavailable, the URL
+is wrong, or credentials do not allow read or write access.
 
 Check from the local machine:
 
@@ -236,7 +236,7 @@ git-ssh-sync config show myproject
 git-ssh-sync doctor myproject
 ```
 
-If `doctor` reports an origin fetch failure, inspect the configured local
+If `doctor` reports an origin access failure, inspect the configured local
 gateway repo:
 
 ```bash
@@ -291,6 +291,35 @@ branch and open a pull request.
 
 `git-ssh-sync` does not force-push to origin. Resolve non-fast-forward and
 protected-branch failures explicitly.
+
+## Windows path is broken
+
+Cause:
+the local shell may consume backslashes in Windows paths before
+`git-ssh-sync` receives them, or the project may be configured with the wrong
+development OS.
+
+Check from the local machine:
+
+```bash
+git-ssh-sync config show myproject
+git-ssh-sync doctor myproject
+```
+
+Fix:
+
+```bash
+git-ssh-sync init myproject \
+  --origin git@github.com:example/myproject.git \
+  --dev-host devserver \
+  --dev-user user \
+  --dev-os windows \
+  --dev-path 'C:\Users\user\work\myproject'
+```
+
+When running the command from macOS or Linux shells, quote Windows paths that
+contain backslashes or use forward slashes such as
+`C:/Users/user/work/myproject`.
 
 ## gitsync remote or cache wiring is wrong
 
