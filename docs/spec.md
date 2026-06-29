@@ -1,4 +1,4 @@
-# git-ssh-sync 仕様書 v0.1
+# git-ssh-sync 仕様書
 
 ## 1. 概要
 
@@ -94,7 +94,7 @@ Python module: git_ssh_sync
 
 ## 5.2 commitは開発環境で行う
 
-`git-ssh-sync` は、MVPではcommit機能を持たない。
+`git-ssh-sync` はcommit機能を持たない。
 
 開発環境では通常どおり以下を実行する。
 
@@ -122,7 +122,7 @@ git-ssh-sync push myproject
 
 ## 5.4 未コミット変更は同期しない
 
-MVPでは、開発環境の未コミットファイルを手元マシンへ同期しない。
+開発環境の未コミットファイルを手元マシンへ同期しない。
 
 理由：
 
@@ -225,7 +225,7 @@ GitHub / GitLabの最新状態を開発環境へ反映する流れ。
 
 # 8. コマンド一覧
 
-MVPで提供するコマンド。
+現在提供する主要コマンド。
 
 ```text
 git-ssh-sync init
@@ -767,7 +767,7 @@ git merge-base --is-ancestor origin/main dev/main
 
 ## 13.1 自動で行わない操作
 
-MVPでは以下を自動実行しない。
+以下は自動実行しない。
 
 ```text
 - merge commitの作成
@@ -813,7 +813,7 @@ Next action:
 
 # 14. Git LFS対応方針
 
-MVPではGit LFSを完全対応しない。
+Git LFSは専用の同期対象として扱わない。
 
 ## 14.1 検出方法
 
@@ -828,7 +828,7 @@ git lfs ls-files
 ```text
 This repository appears to use Git LFS.
 
-Git LFS object synchronization is not supported in v0.1.
+Git LFS object synchronization is not supported by git-ssh-sync.
 Normal Git commits may sync, but LFS file contents may be missing.
 ```
 
@@ -836,7 +836,7 @@ Normal Git commits may sync, but LFS file contents may be missing.
 
 # 15. submodule対応方針
 
-MVPではsubmoduleを完全対応しない。
+submoduleは専用の同期対象として扱わない。
 
 ## 15.1 検出方法
 
@@ -849,7 +849,7 @@ test -f .gitmodules
 ```text
 This repository uses Git submodules.
 
-Submodule synchronization is not supported in v0.1.
+Submodule synchronization is not supported by git-ssh-sync.
 Register each submodule as a separate git-ssh-sync project.
 ```
 
@@ -1137,9 +1137,9 @@ git-ssh-sync push myproject
 
 ---
 
-# 21. MVP実装範囲
+# 21. 現在の対応範囲
 
-## v0.1
+## 基本機能
 
 ```text
 - config.yaml対応
@@ -1161,7 +1161,7 @@ git-ssh-sync push myproject
 
 # 22. 将来拡張
 
-## v0.2
+## 同期操作の拡張
 
 ```text
 - 複数branchの一括同期
@@ -1175,7 +1175,7 @@ git-ssh-sync push myproject
   - git-ssh-sync dev log
 ```
 
-## v0.3
+## 対応対象の拡張
 
 ```text
 - Git LFS同期

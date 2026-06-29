@@ -265,13 +265,15 @@ def print_status(report: StatusReport) -> None:
         console.print()
     if report.uses_lfs:
         console.print("[yellow]This repository appears to use Git LFS.[/yellow]")
-        console.print("Git LFS object synchronization is not supported in v0.1.")
+        console.print(
+            "Git LFS object synchronization is not supported by git-ssh-sync."
+        )
         console.print(
             "Normal Git commits may sync, but LFS file contents may be missing."
         )
     if report.uses_submodules:
         console.print("[yellow]This repository uses Git submodules.[/yellow]")
-        console.print("Submodule synchronization is not supported in v0.1.")
+        console.print("Submodule synchronization is not supported by git-ssh-sync.")
         console.print("Register each submodule as a separate git-ssh-sync project.")
 
 
