@@ -404,6 +404,25 @@ git-ssh-sync recover myproject --yes
 work. If the development work tree is dirty, or if a path is not a compatible Git
 repository, the command stops and prints the manual recovery action.
 
+### Safety Model for State-Changing Commands
+
+Commands that can delete refs, modify remotes, or repair repository wiring print
+their scope before applying changes. Treat `--dry-run` and `--yes` as separate
+modes:
+
+- `--dry-run` prints the planned operations and exits without changing refs,
+  remotes, cache repositories, or work repositories.
+- `--yes` skips the interactive confirmation and applies the printed plan. It is
+  not a dry-run mode.
+- `branch delete` and `branch prune` list the affected location, ref, and Git
+  command for origin, gateway tracking refs, the development cache repository,
+  and the development work repository.
+- `attach`, `doctor --repair`, and `recover --yes` list the affected location
+  and command for safe wiring repairs such as creating the cache repository,
+  seeding the cache branch, or adding/updating the `gitsync` remote.
+- `config remove` only removes the project entry from the local git-ssh-sync
+  config file. It does not delete repository directories or remote refs.
+
 ## Daily Development Workflow
 
 For daily development, `pull` from the local machine before starting work, commit normally in the development environment, and finally `push` from the local machine.

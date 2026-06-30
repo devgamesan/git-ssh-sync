@@ -398,6 +398,26 @@ git-ssh-sync recover myproject --yes
 は行いません。開発環境 work repo が dirty な場合や、指定パスが互換性の
 ある Git リポジトリではない場合は停止し、手動復旧手順を表示します。
 
+### 状態変更コマンドの safety model
+
+ref の削除、remote の変更、リポジトリ紐付け修復を行う可能性がある
+コマンドは、変更前に対象範囲を表示します。`--dry-run` と `--yes` は
+別のモードとして扱ってください。
+
+- `--dry-run` は予定操作を表示して終了し、ref、remote、cache repo、
+  work repo は変更しません。
+- `--yes` は対話確認を省略し、表示された計画を適用します。dry-run
+  ではありません。
+- `branch delete` と `branch prune` は、origin、gateway tracking ref、
+  開発環境 cache repo、開発環境 work repo について、影響 location、
+  ref、Git command を表示します。
+- `attach`、`doctor --repair`、`recover --yes` は、cache repo の作成、
+  cache branch の投入、`gitsync` remote の追加/更新など、安全な紐付け
+  修復について、影響 location と command を表示します。
+- `config remove` はローカルの git-ssh-sync 設定ファイルから project
+  entry を削除するだけです。リポジトリディレクトリや remote ref は
+  削除しません。
+
 ## 日常開発 workflow
 
 日常開発では、作業開始前にローカルマシンから `pull` し、開発環境で通常どおりコミットし、最後にローカルマシンから `push` します。
