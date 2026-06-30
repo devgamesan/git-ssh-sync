@@ -163,6 +163,7 @@ def test_config_remove_command_requires_confirmation(monkeypatch, tmp_path) -> N
     result = runner.invoke(app, ["config", "remove", "myproject"], input="n\n")
 
     assert result.exit_code == 1
+    assert "Repository files are not deleted." in result.output
     assert "Aborted." in result.output
     assert get_project(load_config(default_config_path()), "myproject")
 

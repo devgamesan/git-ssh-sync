@@ -264,7 +264,10 @@ def config_remove_command(
     ] = False,
 ) -> None:
     """Remove a registered project configuration."""
-    if not yes and not typer.confirm(f"Remove project '{project}'?"):
+    config_path = default_config_path()
+    if not yes and not typer.confirm(
+        f"Remove project '{project}' from {config_path}? Repository files are not deleted."
+    ):
         console.print("Aborted.")
         raise typer.Exit(code=1)
 
@@ -274,7 +277,7 @@ def config_remove_command(
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(code=1) from error
 
-    console.print(f"Project '{project}' removed from {default_config_path()}")
+    console.print(f"Project '{project}' removed from {config_path}")
 
 
 @config_app.command("set")

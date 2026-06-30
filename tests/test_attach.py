@@ -30,6 +30,46 @@ def _result(
     return CommandResult("test", command, returncode, stdout, stderr, cwd)
 
 
+def test_print_attach_plan_lists_operation_locations_and_commands(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan = attach.AttachPlan(
+        project="myproject",
+        branch="main",
+        checks=(
+            attach.AttachCheck(
+                name="bare cache repo",
+                status="ok",
+                message="Development cache repository is missing.",
+            ),
+        ),
+        operations=(
+            attach.AttachOperation(
+                kind="seed_cache_branch",
+                location="dev cache repo",
+                description="Push origin/main to cache branch main.",
+                command=(
+                    "git",
+                    "push",
+                    "ssh://user@devserver/home/user/cache%20repo/myproject.git",
+                    "refs/remotes/origin/main:refs/heads/main",
+                ),
+            ),
+        ),
+    )
+
+    attach.print_attach_plan(plan)
+
+    output = capsys.readouterr().out
+    assert "Planned operations" in output
+    assert "dev cache repo" in output
+    assert "Push origin/main" in output
+    assert "branch main." in output
+    assert "git push" in output
+    assert "refs/remotes/origin/main" in output
+    assert "s/heads/main" in output
+
+
 def test_attach_project_creates_missing_cache_and_adds_gitsync(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
