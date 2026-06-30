@@ -11,7 +11,7 @@ from rich.table import Table
 from git_ssh_sync import git, ssh
 from git_ssh_sync.config import ProjectConfig, get_project, load_config
 from git_ssh_sync.console import console
-from git_ssh_sync.errors import CommandExecutionError
+from git_ssh_sync.errors import CommandExecutionError, format_recovery
 
 
 class StatusError(RuntimeError):
@@ -49,8 +49,23 @@ def _ssh_repo_url(
     )
 
 
+def _missing_repo_recovery(project: str, *, repo: str) -> str:
+    return format_recovery(
+        f"`git-ssh-sync doctor {project}` for a full diagnosis.",
+        f"`git-ssh-sync clone {project}` if the {repo} repository needs to be created.",
+        f"`git-ssh-sync config set {project} ...` if the configured path is wrong.",
+    )
+
+
+def _detached_head_recovery(project: str) -> str:
+    return format_recovery(
+        f"`git-ssh-sync doctor {project}` for a full diagnosis.",
+        f"`git-ssh-sync checkout {project} <branch>` to reattach the development work repo.",
+    )
+
+
 def _ensure_remote_work_repo(
-    *, host: str, user: str, path: str, remote_os: ssh.RemoteOS
+    *, project: str, host: str, user: str, path: str, remote_os: ssh.RemoteOS
 ) -> None:
     result = ssh.remote_path_exists(
         host, path, user=user, remote_os=remote_os, path_type="directory"
@@ -59,7 +74,8 @@ def _ensure_remote_work_repo(
         return
     if result.returncode == 1:
         raise StatusError(
-            f"[{result.environment}] work repository does not exist: {path}"
+            f"[{result.environment}] work repository does not exist: {path}\n\n"
+            f"{_missing_repo_recovery(project, repo='development work')}"
         )
     raise CommandExecutionError(
         environment=result.environment,
@@ -109,12 +125,19 @@ def inspect_project_status(project: str, project_config: ProjectConfig) -> Statu
     dev_work_path = project_config.dev.work_path
 
     if not local_path.exists():
-        raise StatusError(f"[local] gateway repository does not exist: {local_path}")
+        raise StatusError(
+            f"[local] gateway repository does not exist: {local_path}\n\n"
+            f"{_missing_repo_recovery(project, repo='gateway')}"
+        )
 
     git.fetch("origin", cwd=local_path)
     ssh.run_remote_command(dev_host, ["true"], user=dev_user, remote_os=dev_os)
     _ensure_remote_work_repo(
-        host=dev_host, user=dev_user, path=dev_work_path, remote_os=dev_os
+        project=project,
+        host=dev_host,
+        user=dev_user,
+        path=dev_work_path,
+        remote_os=dev_os,
     )
 
     dev_branch = _clean_output(
@@ -127,7 +150,10 @@ def inspect_project_status(project: str, project_config: ProjectConfig) -> Statu
         ).stdout
     )
     if not dev_branch:
-        raise StatusError("Development work repository is in detached HEAD state.")
+        raise StatusError(
+            "Development work repository is in detached HEAD state.\n\n"
+            f"{_detached_head_recovery(project)}"
+        )
     branch = dev_branch
 
     dev_repo_url = _ssh_repo_url(
@@ -239,13 +265,15 @@ def print_status(report: StatusReport) -> None:
         console.print()
     if report.uses_lfs:
         console.print("[yellow]This repository appears to use Git LFS.[/yellow]")
-        console.print("Git LFS object synchronization is not supported in v0.1.")
+        console.print(
+            "Git LFS object synchronization is not supported by git-ssh-sync."
+        )
         console.print(
             "Normal Git commits may sync, but LFS file contents may be missing."
         )
     if report.uses_submodules:
         console.print("[yellow]This repository uses Git submodules.[/yellow]")
-        console.print("Submodule synchronization is not supported in v0.1.")
+        console.print("Submodule synchronization is not supported by git-ssh-sync.")
         console.print("Register each submodule as a separate git-ssh-sync project.")
 
 

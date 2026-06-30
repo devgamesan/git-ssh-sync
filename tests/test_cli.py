@@ -163,6 +163,7 @@ def test_config_remove_command_requires_confirmation(monkeypatch, tmp_path) -> N
     result = runner.invoke(app, ["config", "remove", "myproject"], input="n\n")
 
     assert result.exit_code == 1
+    assert "Repository files are not deleted." in result.output
     assert "Aborted." in result.output
     assert get_project(load_config(default_config_path()), "myproject")
 
@@ -294,6 +295,121 @@ def test_init_command_creates_project_config(monkeypatch, tmp_path) -> None:
     assert (
         project.dev.cache_path == "C:\\Users\\user\\.git-ssh-sync\\cache\\myproject.git"
     )
+
+
+def test_init_command_interactive_creates_project_config(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = runner.invoke(
+        app,
+        ["init", "myproject", "--interactive"],
+        input=(
+            "git@github.com:example/myproject.git\n"
+            "devserver\n"
+            "user\n"
+            "posix\n"
+            "/home/user/work/myproject\n"
+            "\n"
+            "\n"
+            "y\n"
+        ),
+    )
+
+    assert result.exit_code == 0
+    assert "Configuration to save:" in result.output
+    assert "local gateway repo path:" in result.output
+    assert "development cache repo path:" in result.output
+    assert "Run `git-ssh-sync doctor myproject`" in result.output
+
+    project = get_project(load_config(default_config_path()), "myproject")
+
+    assert project.origin == "git@github.com:example/myproject.git"
+    assert project.local.repo_path == str(tmp_path / ".git-ssh-sync/repos/myproject")
+    assert project.dev.host == "devserver"
+    assert project.dev.user == "user"
+    assert project.dev.os == "posix"
+    assert project.dev.work_path == "/home/user/work/myproject"
+    assert project.dev.cache_path == "/home/user/.git-ssh-sync/cache/myproject.git"
+
+
+def test_init_command_interactive_uses_options_as_defaults(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = runner.invoke(
+        app,
+        [
+            "init",
+            "myproject",
+            "--interactive",
+            "--origin",
+            "git@github.com:example/myproject.git",
+            "--dev-host",
+            "devserver",
+            "--dev-user",
+            "user",
+            "--dev-os",
+            "windows",
+            "--dev-path",
+            "C:/Users/user/work/myproject",
+        ],
+        input="\n\ncustom-cache.git\ny\n",
+    )
+
+    assert result.exit_code == 0
+    project = get_project(load_config(default_config_path()), "myproject")
+
+    assert project.dev.os == "windows"
+    assert project.dev.work_path == "C:/Users/user/work/myproject"
+    assert project.dev.cache_path == "custom-cache.git"
+
+
+def test_init_command_interactive_cancels_without_writing(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = runner.invoke(
+        app,
+        ["init", "myproject", "--interactive"],
+        input=(
+            "git@github.com:example/myproject.git\n"
+            "devserver\n"
+            "user\n"
+            "posix\n"
+            "/home/user/work/myproject\n"
+            "\n"
+            "\n"
+            "n\n"
+        ),
+    )
+
+    assert result.exit_code == 1
+    assert "Configuration not saved." in result.output
+    assert "myproject" not in load_config(default_config_path()).projects
+
+
+def test_init_command_interactive_rejects_unquoted_windows_path(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = runner.invoke(
+        app,
+        ["init", "myproject", "--interactive"],
+        input=(
+            "git@github.com:example/myproject.git\n"
+            "devserver\n"
+            "user\n"
+            "windows\n"
+            "C:Usersuserworkmyproject\n"
+        ),
+    )
+
+    assert result.exit_code == 1
+    assert "separators were removed by the shell" in " ".join(result.output.split())
+    assert "myproject" not in load_config(default_config_path()).projects
 
 
 def test_init_command_rejects_unquoted_windows_path(monkeypatch, tmp_path) -> None:

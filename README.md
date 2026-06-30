@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/devgamesan/git-ssh-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/devgamesan/git-ssh-sync/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
+![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg)
 ![Release](https://img.shields.io/github/v/release/devgamesan/git-ssh-sync)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
@@ -97,6 +97,9 @@ Development environment
 | Local machine | Can access GitHub / GitLab, can SSH to the development environment, and has `git` and `uv` available |
 | Development environment | Can be accessed via SSH from the local machine, has `git` available, and does not need direct GitHub / GitLab access |
 
+For v1.0, `git-ssh-sync` supports Python 3.12 and 3.13. CI runs the full test
+suite on both supported versions.
+
 Run `git-ssh-sync` on the local machine. Edit, build, test, and commit on the
 development environment. Synchronization between the two sides happens through
 Git commits and branches.
@@ -166,6 +169,22 @@ run `push` from the local machine.
 ## Configuration
 
 First, register the project you want to synchronize.
+
+For guided first-time setup, use interactive mode. It prompts for required
+values, shows generated defaults, and asks for confirmation before writing the
+configuration.
+
+```bash
+git-ssh-sync init myproject --interactive
+```
+
+After saving, run `doctor` to check the configuration and connectivity.
+
+```bash
+git-ssh-sync doctor myproject
+```
+
+You can also provide all values non-interactively.
 
 ```bash
 git-ssh-sync init myproject \
@@ -385,6 +404,25 @@ git-ssh-sync recover myproject --yes
 work. If the development work tree is dirty, or if a path is not a compatible Git
 repository, the command stops and prints the manual recovery action.
 
+### Safety Model for State-Changing Commands
+
+Commands that can delete refs, modify remotes, or repair repository wiring print
+their scope before applying changes. Treat `--dry-run` and `--yes` as separate
+modes:
+
+- `--dry-run` prints the planned operations and exits without changing refs,
+  remotes, cache repositories, or work repositories.
+- `--yes` skips the interactive confirmation and applies the printed plan. It is
+  not a dry-run mode.
+- `branch delete` and `branch prune` list the affected location, ref, and Git
+  command for origin, gateway tracking refs, the development cache repository,
+  and the development work repository.
+- `attach`, `doctor --repair`, and `recover --yes` list the affected location
+  and command for safe wiring repairs such as creating the cache repository,
+  seeding the cache branch, or adding/updating the `gitsync` remote.
+- `config remove` only removes the project entry from the local git-ssh-sync
+  config file. It does not delete repository directories or remote refs.
+
 ## Daily Development Workflow
 
 For daily development, `pull` from the local machine before starting work, commit normally in the development environment, and finally `push` from the local machine.
@@ -468,6 +506,17 @@ Recommended release flow:
 3. Run `git-ssh-sync sync-tags myproject --direction dev-to-origin --dry-run`.
 4. If the dry-run reports only the intended new tag, run the command without
    `--dry-run`.
+
+## v1.0 Release Checklist
+
+Before cutting a v1.0 release, confirm the following:
+
+1. `README.md` and `README.ja.md` describe the same supported workflows, limitations, and quick-start steps.
+2. `docs/troubleshooting.md` covers the common failure modes users are likely to hit during setup and daily sync.
+3. `docs/manual-testing.md` still reflects the current manual E2E coverage and any recorded v1.0 verification results.
+4. `uv run ruff check src tests` and `uv run pytest` pass on the supported Python versions.
+5. The release tag is created in the development work repository, then published with `git-ssh-sync sync-tags myproject --direction dev-to-origin`.
+6. The release notes or changelog, if present, match the final supported scope and known limitations.
 
 ## Workflow When Push Stops
 
@@ -656,6 +705,13 @@ Use `status` first when synchronization stops or the current state is unclear.
 Use `doctor` for setup, connectivity, and repository wiring problems. Use
 `recover` after an interrupted `pull` or `push`.
 For a fuller operational guide, see [Troubleshooting](docs/troubleshooting.md).
+The detailed guide covers [dirty work trees](docs/troubleshooting.md#development-work-repo-is-dirty),
+[diverged branches](docs/troubleshooting.md#branch-has-diverged-or-cannot-fast-forward),
+[SSH failures](docs/troubleshooting.md#ssh-connection-fails),
+[Git authentication and origin access](docs/troubleshooting.md#git-authentication-or-origin-access-fails),
+[remote wiring issues](docs/troubleshooting.md#gitsync-remote-or-cache-wiring-is-wrong),
+[LFS and submodules](docs/troubleshooting.md#git-lfs-and-submodules-are-not-supported),
+and [Windows path quoting](docs/troubleshooting.md#windows-path-is-broken).
 
 ### push stops because origin has new commits
 
@@ -900,11 +956,15 @@ To execute the CLI during development, you can run it via `uv run`.
 uv run git-ssh-sync --help
 ```
 
-Tests are executed with the following command:
+Run the same checks enforced by CI with the following commands:
 
 ```bash
+uv run ruff check src tests manual_tests
+uv run ruff format --check src tests manual_tests
 uv run pytest
 ```
+
+Ruff currently checks Python source and tests. If future tooling adds support for documentation formats, include docs in the local and CI checks together.
 
 ## Related Documentation
 

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/devgamesan/git-ssh-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/devgamesan/git-ssh-sync/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
+![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg)
 ![Release](https://img.shields.io/github/v/release/devgamesan/git-ssh-sync)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
@@ -97,6 +97,9 @@ GitHub / GitLab
 | ローカルマシン | GitHub / GitLab にアクセスでき、開発環境へ SSH 接続でき、`git` と `uv` を利用できる |
 | 開発環境 | ローカルマシンから SSH 接続でき、`git` を利用でき、GitHub / GitLab への直接アクセスは不要 |
 
+v1.0 では Python 3.12 と 3.13 をサポートします。CI では両方の
+サポート対象バージョンでテスト一式を実行します。
+
 `git-ssh-sync` はローカルマシンで実行します。編集、ビルド、テスト、
 コミットは開発環境で行います。両者の同期は Git commit / branch 単位で
 行われます。
@@ -166,6 +169,21 @@ git-ssh-sync push myproject
 ## 設定
 
 最初に、同期したいプロジェクトを登録します。
+
+初回セットアップでは interactive mode を使うと、必要な値を対話形式で入力できます。
+生成されるデフォルト値を確認し、保存前に確認できます。
+
+```bash
+git-ssh-sync init myproject --interactive
+```
+
+保存後は `doctor` で設定と接続状態を確認します。
+
+```bash
+git-ssh-sync doctor myproject
+```
+
+すべての値をコマンドラインで指定することもできます。
 
 ```bash
 git-ssh-sync init myproject \
@@ -380,6 +398,26 @@ git-ssh-sync recover myproject --yes
 は行いません。開発環境 work repo が dirty な場合や、指定パスが互換性の
 ある Git リポジトリではない場合は停止し、手動復旧手順を表示します。
 
+### 状態変更コマンドの safety model
+
+ref の削除、remote の変更、リポジトリ紐付け修復を行う可能性がある
+コマンドは、変更前に対象範囲を表示します。`--dry-run` と `--yes` は
+別のモードとして扱ってください。
+
+- `--dry-run` は予定操作を表示して終了し、ref、remote、cache repo、
+  work repo は変更しません。
+- `--yes` は対話確認を省略し、表示された計画を適用します。dry-run
+  ではありません。
+- `branch delete` と `branch prune` は、origin、gateway tracking ref、
+  開発環境 cache repo、開発環境 work repo について、影響 location、
+  ref、Git command を表示します。
+- `attach`、`doctor --repair`、`recover --yes` は、cache repo の作成、
+  cache branch の投入、`gitsync` remote の追加/更新など、安全な紐付け
+  修復について、影響 location と command を表示します。
+- `config remove` はローカルの git-ssh-sync 設定ファイルから project
+  entry を削除するだけです。リポジトリディレクトリや remote ref は
+  削除しません。
+
 ## 日常開発 workflow
 
 日常開発では、作業開始前にローカルマシンから `pull` し、開発環境で通常どおりコミットし、最後にローカルマシンから `push` します。
@@ -459,6 +497,17 @@ git-ssh-sync sync-tags myproject --direction dev-to-origin
 2. 開発環境の work repo でリリースタグを作成する。
 3. `git-ssh-sync sync-tags myproject --direction dev-to-origin --dry-run` を実行する。
 4. dry-run に意図した新規タグだけが表示されることを確認し、`--dry-run` なしで実行する。
+
+## v1.0 リリースチェックリスト
+
+v1.0 を切る前に、次を確認します。
+
+1. `README.md` と `README.ja.md` が、同じ利用フロー、制限、クイックスタートを説明している。
+2. `docs/troubleshooting.md` が、セットアップと日常同期で遭遇しやすい失敗を扱っている。
+3. `docs/manual-testing.md` が、現在の manual E2E coverage と v1.0 の検証結果を反映している。
+4. 対応 Python バージョンで `uv run ruff check src tests` と `uv run pytest` が通る。
+5. リリースタグを開発環境の work repo で作成し、`git-ssh-sync sync-tags myproject --direction dev-to-origin` で公開する。
+6. release notes や changelog がある場合は、最終的な対応範囲と既知の制限と一致している。
 
 ## push が止まった時の workflow
 
@@ -646,6 +695,13 @@ git-ssh-sync dev log myproject --max-count 5
 初期設定、接続、リポジトリの紐付けに問題がありそうな時は `doctor` を使います。
 `pull` / `push` が途中停止した後は `recover` を使います。
 詳しい運用手順は [Troubleshooting](docs/troubleshooting.md) を参照してください。
+詳細ガイドには、[dirty な work tree](docs/troubleshooting.md#development-work-repo-is-dirty)、
+[分岐した branch](docs/troubleshooting.md#branch-has-diverged-or-cannot-fast-forward)、
+[SSH 失敗](docs/troubleshooting.md#ssh-connection-fails)、
+[Git 認証と origin アクセス](docs/troubleshooting.md#git-authentication-or-origin-access-fails)、
+[remote の紐付け不整合](docs/troubleshooting.md#gitsync-remote-or-cache-wiring-is-wrong)、
+[LFS / submodule](docs/troubleshooting.md#git-lfs-and-submodules-are-not-supported)、
+[Windows パスの引用](docs/troubleshooting.md#windows-path-is-broken) があります。
 
 ### push が止まる
 
@@ -889,11 +945,15 @@ uv tool install \
 uv run git-ssh-sync --help
 ```
 
-テストは次のコマンドで実行します。
+CI と同じ確認は次のコマンドで実行します。
 
 ```bash
+uv run ruff check src tests manual_tests
+uv run ruff format --check src tests manual_tests
 uv run pytest
 ```
+
+現在 Ruff の対象は Python ソースとテストです。将来ドキュメント形式に対応した tooling を導入する場合は、ローカル確認と CI の両方に docs を追加します。
 
 ## 関連ドキュメント
 

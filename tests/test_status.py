@@ -149,10 +149,16 @@ def test_inspect_project_status_detects_dirty_lfs_and_submodules(
 
 
 def test_inspect_project_status_reports_missing_gateway_repo(tmp_path: Path) -> None:
-    with pytest.raises(StatusError, match="gateway repository does not exist"):
+    with pytest.raises(StatusError) as exc_info:
         status.inspect_project_status(
             "myproject", _project_config(tmp_path / "missing")
         )
+
+    message = str(exc_info.value)
+    assert "gateway repository does not exist" in message
+    assert "Recovery:" in message
+    assert "git-ssh-sync doctor myproject" in message
+    assert "git-ssh-sync clone myproject" in message
 
 
 def test_print_status_outputs_required_sections(
@@ -187,7 +193,9 @@ def test_print_status_outputs_required_sections(
     assert "git-ssh-sync push myproject" not in output
     assert "Commit or stash changes" in output
     assert "Git LFS" in output
+    assert "Git LFS object synchronization is not supported by git-ssh-sync" in output
     assert "Git submodules" in output
+    assert "Submodule synchronization is not supported by git-ssh-sync" in output
 
 
 def test_recommendation_includes_required_branch_option(

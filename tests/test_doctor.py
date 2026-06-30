@@ -121,8 +121,9 @@ def test_inspect_project_doctor_warns_for_lfs_and_submodules(
     submodules = _by_name(report, "submodules")[0]
     assert report.has_errors is False
     assert lfs.status == "warning"
-    assert "not supported in v0.1" in (lfs.next_action or "")
+    assert "not supported by git-ssh-sync" in (lfs.next_action or "")
     assert submodules.status == "warning"
+    assert "not supported by git-ssh-sync" in (submodules.next_action or "")
     assert "separate git-ssh-sync project" in (submodules.next_action or "")
 
 

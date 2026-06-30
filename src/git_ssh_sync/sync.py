@@ -7,7 +7,7 @@ from pathlib import Path
 from git_ssh_sync import git, ssh
 from git_ssh_sync.config import ProjectConfig, get_project, load_config
 from git_ssh_sync.console import console
-from git_ssh_sync.errors import CommandExecutionError
+from git_ssh_sync.errors import CommandExecutionError, format_recovery
 from git_ssh_sync.logging_config import logger
 
 
@@ -236,13 +236,35 @@ def _ensure_gitsync_remote_matches(project: str, project_config: ProjectConfig) 
     )
 
 
-def _require_remote_current_branch(project_config: ProjectConfig) -> str:
+def _detached_head_recovery(project: str) -> str:
+    return format_recovery(
+        f"`git-ssh-sync doctor {project}` for a full diagnosis.",
+        f"`git-ssh-sync checkout {project} <branch>` to reattach the development work repo.",
+    )
+
+
+def _dirty_worktree_recovery(project: str) -> str:
+    return format_recovery(
+        f"`git-ssh-sync dev status {project}` to inspect the development worktree.",
+        f"`git-ssh-sync dev diff {project} --stat` to review the pending changes.",
+        "Commit or stash changes on the development environment before retrying.",
+    )
+
+
+def _origin_push_recovery(project: str) -> str:
+    return format_recovery(
+        "Check branch protection and your origin repository permissions.",
+        f"`git-ssh-sync pull {project}` if origin has newer commits.",
+        "Inspect the origin URL and local Git credentials if authentication failed.",
+    )
+
+
+def _require_remote_current_branch(project: str, project_config: ProjectConfig) -> str:
     branch = _remote_current_branch(project_config)
     if branch == "(detached)":
         raise SyncError(
             "Development work repository is in detached HEAD state.\n\n"
-            "Switch to a branch on the development environment or run:\n\n"
-            "  git-ssh-sync checkout <project> <branch>"
+            f"{_detached_head_recovery(project)}"
         )
     return branch
 
@@ -537,7 +559,7 @@ def _dirty_error(project: str, project_config: ProjectConfig) -> SyncError:
         f"  path: {project_config.dev.work_path}\n"
         f"  branch: {_remote_current_branch(project_config)}\n"
         f"  commit: {_remote_short_head(project_config)}\n\n"
-        "Commit or stash changes first."
+        f"{_dirty_worktree_recovery(project)}"
     )
 
 
@@ -705,7 +727,7 @@ def pull_project(project: str, *, dry_run: bool = False) -> None:
 
     _ensure_gateway_repo(local_path)
     _ensure_gitsync_remote_matches(project, project_config)
-    selected_branch = _require_remote_current_branch(project_config)
+    selected_branch = _require_remote_current_branch(project, project_config)
 
     logger.info(f"Pulling project '{project}' branch '{selected_branch}'")
 
@@ -780,7 +802,9 @@ def checkout_project(
         ]
         operations = ["fetch origin in the gateway repository"]
         if create:
-            base = base_branch or _require_remote_current_branch(project_config)
+            base = base_branch or _require_remote_current_branch(
+                project, project_config
+            )
             _ensure_origin_branch_on_remote(local_path, base)
             _ensure_origin_branch_missing_on_remote(project, local_path, branch)
             preflight.extend(
@@ -826,7 +850,7 @@ def checkout_project(
 
     git.fetch("origin", cwd=local_path)
     if create:
-        base = base_branch or _require_remote_current_branch(project_config)
+        base = base_branch or _require_remote_current_branch(project, project_config)
         _ensure_origin_branch(local_path, base)
         _ensure_origin_branch_missing(project, local_path, branch)
         _create_origin_branch(local_path, branch, base)
@@ -846,7 +870,7 @@ def push_project(project: str, *, dry_run: bool = False) -> None:
 
     _ensure_gateway_repo(local_path)
     _ensure_gitsync_remote_matches(project, project_config)
-    selected_branch = _require_remote_current_branch(project_config)
+    selected_branch = _require_remote_current_branch(project, project_config)
 
     logger.info(f"Pushing project '{project}' branch '{selected_branch}'")
 
@@ -897,5 +921,6 @@ def push_project(project: str, *, dry_run: bool = False) -> None:
         raise SyncError(
             f"Failed to push {selected_branch} to origin.\n\n"
             f"Project:\n  {project}\n\n"
-            f"Origin push failed:\n{error}"
+            f"Origin push failed:\n{error}\n\n"
+            f"{_origin_push_recovery(project)}"
         ) from error

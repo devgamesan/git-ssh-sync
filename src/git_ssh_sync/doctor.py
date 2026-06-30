@@ -570,7 +570,9 @@ def _check_repository(
                 "Git LFS",
                 "This repository appears to use Git LFS.",
                 environment="local",
-                next_action="Git LFS object synchronization is not supported in v0.1.",
+                next_action=(
+                    "Git LFS object synchronization is not supported by git-ssh-sync."
+                ),
             )
         )
     else:
@@ -590,7 +592,10 @@ def _check_repository(
                 "submodules",
                 "This repository uses Git submodules.",
                 environment="local",
-                next_action="Register each submodule as a separate git-ssh-sync project.",
+                next_action=(
+                    "Submodule synchronization is not supported by git-ssh-sync. "
+                    "Register each submodule as a separate git-ssh-sync project."
+                ),
             )
         )
     else:

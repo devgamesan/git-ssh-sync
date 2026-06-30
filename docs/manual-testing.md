@@ -32,6 +32,43 @@ uv run pytest manual_tests
 
 Linux と Windows の両方を同時に指定すると、両方のリモートに対して同じフローを実行します。
 
+### v1.0 Windows 検証結果
+
+2026-06-29 に Windows リモート単独の手動 E2E を確認しました。
+
+実行環境:
+
+```text
+Local OS: macOS
+Python: 3.13.13
+Windows SSH host: windows
+Windows SSH user: gmsn1
+Windows account: ryzen5pc\gmsn1
+Windows Git: git version 2.54.0.windows.1
+Test origin: https://github.com/devgamesan/test_project
+```
+
+実行コマンド:
+
+```bash
+GSS_TEST_ORIGIN_URL=https://github.com/devgamesan/test_project \
+GSS_TEST_WINDOWS_HOST=windows \
+GSS_TEST_WINDOWS_USER=gmsn1 \
+uv run pytest manual_tests -vv
+```
+
+結果:
+
+```text
+manual_tests/test_manual_e2e.py::test_manual_checklist_e2e PASSED
+1 passed in 270.95s
+```
+
+後片付け確認:
+
+- `https://github.com/devgamesan/test_project` に `manual/*` ブランチと `manual-*` タグが残っていないことを確認
+- Windows リモートに E2E 用の work repo と cache repo が残っていないことを確認
+
 任意で次の環境変数を指定できます。
 
 ```text

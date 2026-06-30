@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,7 +45,9 @@ class AttachOperation:
     """Repair operation that can be applied after preflight."""
 
     kind: OperationKind
+    location: str
     description: str
+    command: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -86,6 +89,74 @@ def _as_command_error(result: git.CommandResult) -> CommandExecutionError:
         cwd=result.cwd,
         stdout=result.stdout,
         stderr=result.stderr,
+    )
+
+
+def _dev_target(project_config: ProjectConfig) -> str:
+    if project_config.dev.user:
+        return f"{project_config.dev.user}@{project_config.dev.host}"
+    return project_config.dev.host
+
+
+def _create_cache_operation(project_config: ProjectConfig) -> AttachOperation:
+    parent = ssh.remote_parent(project_config.dev.cache_path, project_config.dev.os)
+    return AttachOperation(
+        "create_cache",
+        "dev cache repo",
+        f"Create bare cache repository at {project_config.dev.cache_path}.",
+        (
+            "ssh",
+            _dev_target(project_config),
+            f"mkdir -p {parent} && git init --bare {project_config.dev.cache_path}",
+        ),
+    )
+
+
+def _seed_cache_branch_operation(
+    project_config: ProjectConfig, branch: str
+) -> AttachOperation:
+    cache_url = ssh.remote_git_url(
+        host=project_config.dev.host,
+        user=project_config.dev.user,
+        repo_path=project_config.dev.cache_path,
+        remote_os=project_config.dev.os,
+    )
+    return AttachOperation(
+        "seed_cache_branch",
+        "dev cache repo",
+        f"Push origin/{branch} to cache branch {branch}.",
+        (
+            "git",
+            "push",
+            cache_url,
+            f"refs/remotes/origin/{branch}:refs/heads/{branch}",
+        ),
+    )
+
+
+def _add_gitsync_remote_operation(project_config: ProjectConfig) -> AttachOperation:
+    return AttachOperation(
+        "add_gitsync_remote",
+        "dev work repo",
+        f"Add gitsync remote pointing to {project_config.dev.cache_path}.",
+        (
+            "ssh",
+            _dev_target(project_config),
+            f"git -C {project_config.dev.work_path} remote add gitsync {project_config.dev.cache_path}",
+        ),
+    )
+
+
+def _update_gitsync_remote_operation(project_config: ProjectConfig) -> AttachOperation:
+    return AttachOperation(
+        "update_gitsync_remote",
+        "dev work repo",
+        f"Set gitsync remote URL to {project_config.dev.cache_path}.",
+        (
+            "ssh",
+            _dev_target(project_config),
+            f"git -C {project_config.dev.work_path} remote set-url gitsync {project_config.dev.cache_path}",
+        ),
     )
 
 
@@ -283,18 +354,8 @@ def inspect_project_attach(project: str, project_config: ProjectConfig) -> Attac
         checks.append(
             _ok("bare cache repo", "Development cache repository is missing.")
         )
-        operations.append(
-            AttachOperation(
-                "create_cache",
-                f"Create bare cache repository at {project_config.dev.cache_path}.",
-            )
-        )
-        operations.append(
-            AttachOperation(
-                "seed_cache_branch",
-                f"Push origin/{branch} to cache branch {branch}.",
-            )
-        )
+        operations.append(_create_cache_operation(project_config))
+        operations.append(_seed_cache_branch_operation(project_config, branch))
     else:
         cache_bare = _remote_git_check(
             project_config,
@@ -317,12 +378,7 @@ def inspect_project_attach(project: str, project_config: ProjectConfig) -> Attac
                 ["show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
             )
             if cache_branch.returncode == 1:
-                operations.append(
-                    AttachOperation(
-                        "seed_cache_branch",
-                        f"Push origin/{branch} to cache branch {branch}.",
-                    )
-                )
+                operations.append(_seed_cache_branch_operation(project_config, branch))
             elif cache_branch.returncode != 0:
                 raise _as_command_error(cache_branch)
 
@@ -341,20 +397,10 @@ def inspect_project_attach(project: str, project_config: ProjectConfig) -> Attac
                 f"gitsync remote will be updated from {gitsync.stdout.strip()}.",
             )
         )
-        operations.append(
-            AttachOperation(
-                "update_gitsync_remote",
-                f"Set gitsync remote URL to {project_config.dev.cache_path}.",
-            )
-        )
+        operations.append(_update_gitsync_remote_operation(project_config))
     else:
         checks.append(_ok("gitsync remote", "gitsync remote is missing."))
-        operations.append(
-            AttachOperation(
-                "add_gitsync_remote",
-                f"Add gitsync remote pointing to {project_config.dev.cache_path}.",
-            )
-        )
+        operations.append(_add_gitsync_remote_operation(project_config))
 
     return AttachPlan(project, branch, tuple(checks), tuple(operations))
 
@@ -384,8 +430,17 @@ def print_attach_plan(plan: AttachPlan) -> None:
     console.print()
     if plan.operations:
         console.print("[bold]Planned operations[/bold]")
+        table = Table(show_header=True)
+        table.add_column("Location", no_wrap=True)
+        table.add_column("Operation", overflow="fold")
+        table.add_column("Command", overflow="fold")
         for operation in plan.operations:
-            console.print(f"- {escape(operation.description)}")
+            table.add_row(
+                escape(operation.location),
+                escape(operation.description),
+                escape(shlex.join(operation.command)),
+            )
+        console.print(table)
     else:
         console.print("No repair operations needed.")
 

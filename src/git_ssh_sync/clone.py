@@ -7,7 +7,7 @@ from pathlib import Path
 
 from git_ssh_sync import git, ssh
 from git_ssh_sync.config import get_project, load_config
-from git_ssh_sync.errors import CommandExecutionError
+from git_ssh_sync.errors import CommandExecutionError, format_recovery
 from git_ssh_sync.logging_config import logger
 
 
@@ -15,19 +15,32 @@ class CloneError(RuntimeError):
     """Raised when the clone workflow would overwrite existing data."""
 
 
-def _ensure_local_missing(path: Path) -> None:
+def _path_exists_recovery(project: str) -> str:
+    return format_recovery(
+        f"Run `git-ssh-sync attach {project} --dry-run` if the existing repositories should be reused.",
+        "Move or delete the existing path if you want to recreate the project from scratch.",
+        f"Run `git-ssh-sync config set {project} ...` if the configured path is wrong.",
+    )
+
+
+def _ensure_local_missing(project: str, path: Path) -> None:
     if path.exists():
-        raise CloneError(f"[local] path already exists: {path}")
+        raise CloneError(
+            f"[local] path already exists: {path}\n\n{_path_exists_recovery(project)}"
+        )
 
 
 def _ensure_remote_missing(
-    *, host: str, user: str, path: str, remote_os: ssh.RemoteOS
+    *, project: str, host: str, user: str, path: str, remote_os: ssh.RemoteOS
 ) -> None:
     result = ssh.remote_path_exists(
         host, path, user=user, remote_os=remote_os, path_type="any"
     )
     if result.returncode == 0:
-        raise CloneError(f"[{result.environment}] path already exists: {path}")
+        raise CloneError(
+            f"[{result.environment}] path already exists: {path}\n\n"
+            f"{_path_exists_recovery(project)}"
+        )
     if result.returncode == 1:
         return
     raise CommandExecutionError(
@@ -85,12 +98,20 @@ def clone_project(project: str) -> None:
     cache_path = project_config.dev.cache_path
     work_path = project_config.dev.work_path
 
-    _ensure_local_missing(local_path)
+    _ensure_local_missing(project, local_path)
     _ensure_remote_missing(
-        host=dev_host, user=dev_user, path=cache_path, remote_os=dev_os
+        project=project,
+        host=dev_host,
+        user=dev_user,
+        path=cache_path,
+        remote_os=dev_os,
     )
     _ensure_remote_missing(
-        host=dev_host, user=dev_user, path=work_path, remote_os=dev_os
+        project=project,
+        host=dev_host,
+        user=dev_user,
+        path=work_path,
+        remote_os=dev_os,
     )
 
     local_started = False
